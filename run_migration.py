@@ -1,4 +1,4 @@
-pbpaste > run_migration.py   # copy from artifact first
+pbpaste > run_migration.py
 git add run_migration.py
 git commit -m "add check_explore, fix validate"
 git push
