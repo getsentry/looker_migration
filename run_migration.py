@@ -174,9 +174,28 @@ def is_problem_field(field):
 
 
 
-def check_explore(sdk):
+def check_explore(sdk, source_id):
     """Verify all FIELD_MAP destinations and JOINED_VIEWS exist in the new explore."""
     print(f"\n=== Checking fields exist in {NEW_MODEL}/{NEW_EXPLORE} ===")
+    # Only check fields actually used in this dashboard
+    elements = sdk.dashboard_dashboard_elements(source_id)
+    used_old_fields = set()
+    for el in elements:
+        if not el.query_id:
+            continue
+        q = sdk.query(str(el.query_id))
+        for f in (q.fields or []):
+            used_old_fields.add(f)
+        for f in (q.filters or {}).keys():
+            used_old_fields.add(f)
+        if q.dynamic_fields:
+            try:
+                for d in json.loads(q.dynamic_fields):
+                    if d.get("based_on"):
+                        used_old_fields.add(d["based_on"])
+            except Exception:
+                pass
+
     explore = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
     all_fields = set()
     for f in (explore.fields.dimensions or []):
@@ -184,19 +203,38 @@ def check_explore(sdk):
     for f in (explore.fields.measures or []):
         all_fields.add(f.name)
     all_views = {f.split(".")[0] for f in all_fields}
+    # map of (old_field, new_field) -> list of tile names
+    missing_fields = {}
+    for el in elements:
+        if not el.query_id:
+            continue
+        q = sdk.query(str(el.query_id))
+        el_fields = set(q.fields or []) | set((q.filters or {}).keys())
+        if q.dynamic_fields:
+            try:
+                for d in json.loads(q.dynamic_fields):
+                    if d.get("based_on"):
+                        el_fields.add(d["based_on"])
+            except Exception:
+                pass
+        for old_field, new_field in FIELD_MAP.items():
+            if old_field in el_fields and new_field not in all_fields:
+                key = (old_field, new_field)
+                tile_name = el.title or "(untitled tile)"
+                missing_fields.setdefault(key, set()).add(tile_name)
     issues = []
-    for old_field, new_field in FIELD_MAP.items():
-        if new_field not in all_fields:
-            issues.append(f"  FIELD_MAP destination missing in explore: {old_field} -> {new_field}")
+    for (old_field, new_field), tiles in missing_fields.items():
+        tile_list = ", ".join(f"'{t}'" for t in sorted(tiles))
+        issues.append(f"  {old_field} -> ❌ {new_field} (used in: {tile_list})")
     for view in JOINED_VIEWS_IN_NEW_EXPLORE:
         if view not in all_views:
-            issues.append(f"  JOINED_VIEWS_IN_NEW_EXPLORE view not found in explore: {view}")
+            issues.append(f"  JOINED_VIEWS_IN_NEW_EXPLORE view not found in explore: ❌ {view}")
     if issues:
-        print("\u26a0\ufe0f  Issues found:")
+        print("\u26a0\ufe0f  Issues found — check if these tiles matter to your migration:")
         for i in issues:
             print(i)
         return False
-    print(f"  \u2705 All {len(FIELD_MAP)} mapped fields and {len(JOINED_VIEWS_IN_NEW_EXPLORE)} joined views confirmed in new explore")
+    print(f"  \u2705 All relevant mapped fields confirmed in new explore")
     return True
 
 def validate(sdk, source_id):
@@ -618,7 +656,7 @@ if __name__ == "__main__":
 
     # --check-explore: verify FIELD_MAP destinations and JOINED_VIEWS exist in new explore
     if args.check_explore:
-        ok = check_explore(sdk)
+        ok = check_explore(sdk, source_id)
         sys.exit(0 if ok else 1)
 
     # --validate: check source dashboard tiles for unmapped fields
