@@ -300,6 +300,17 @@ def snapshot(sdk, dest_id, dry_run):
 # ─────────────────────────────────────────────
 def copy_vis_config_from_source(sdk, source_id, dest_id, dry_run):
     print(f"\n=== Step 1b: Copy vis_config from source dashboard {source_id} ===")
+    # Cache explore fields once for WILL BREAK checks
+    try:
+        _exp = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
+        _explore_fields = set()
+        for _f in (_exp.fields.dimensions or []):
+            _explore_fields.add(_f.name)
+        for _f in (_exp.fields.measures or []):
+            _explore_fields.add(_f.name)
+    except Exception:
+        _explore_fields = set()
+
     source_elements = sdk.dashboard_dashboard_elements(source_id, fields="id,title,query_id,result_maker")
     dest_elements   = sdk.dashboard_dashboard_elements(dest_id)
 
@@ -337,7 +348,6 @@ def copy_vis_config_from_source(sdk, source_id, dest_id, dry_run):
             src_row_total = src_q.row_total
 
         if dry_run:
-            # Check source query for any problem fields even if already on new explore
             src_q = sdk.query(str(src_el.query_id)) if src_el.query_id else None
             if src_q:
                 for f in (src_q.fields or []):
@@ -351,8 +361,11 @@ def copy_vis_config_from_source(sdk, source_id, dest_id, dry_run):
                         for d in json.loads(src_q.dynamic_fields):
                             label = d.get("label") or d.get("table_calculation") or "(unnamed)"
                             based_on = d.get("based_on", "")
-                            if based_on and is_problem_field(based_on):
-                                print(f"  ❌ WILL BREAK '{el.title}' — dynamic field '{label}' based_on not in new explore: {based_on}")
+                            if based_on:
+                                if is_problem_field(based_on):
+                                    print(f"  ❌ WILL BREAK '{el.title}' — dynamic field '{label}' based_on not in new explore: {based_on}")
+                                elif based_on in FIELD_MAP and FIELD_MAP[based_on] not in _explore_fields:
+                                    print(f"  ❌ WILL BREAK '{el.title}' — dynamic field '{label}' maps to missing field: {based_on} → {FIELD_MAP[based_on]}")
                     except Exception:
                         pass
             print(f"  [DRY RUN] Would copy {vc.get('type')} → '{el.title}' (total={src_total})")
