@@ -634,5 +634,3 @@ if __name__ == "__main__":
     reconnect_dashboard_filters(sdk, source_id, dest_id, dry_run)
     verify(sdk, dest_id)
     print(f"\n✓ Done — snapshot saved to snapshot_{dest_id}.json")
-    verify(sdk, dest_id)
-    print(f"\n✓ Done — snapshot saved to snapshot_{dest_id}.json")
