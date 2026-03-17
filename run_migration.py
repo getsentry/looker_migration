@@ -86,8 +86,8 @@ FIELD_MAP = {
 # ─────────────────────────────────────────────
 def parse_args():
     p = argparse.ArgumentParser(description="Looker dashboard migration tool")
-    p.add_argument("--source",        required=True, help="Source dashboard ID (copy FROM)")
-    p.add_argument("--dest",          required=True, help="Destination dashboard ID (copy TO)")
+    p.add_argument("--source",        required=False, default=None, help="Source dashboard ID (copy FROM)")
+    p.add_argument("--dest",          required=False, default=None, help="Destination dashboard ID (copy TO)")
     p.add_argument("--dry-run",       action="store_true", help="Preview changes without writing")
     p.add_argument("--validate",      action="store_true", help="Check source dashboard tiles for unmapped fields")
     p.add_argument("--check-explore", action="store_true", help="Verify all FIELD_MAP destinations and JOINED_VIEWS exist in new explore")
