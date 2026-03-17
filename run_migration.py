@@ -634,11 +634,5 @@ if __name__ == "__main__":
     reconnect_dashboard_filters(sdk, source_id, dest_id, dry_run)
     verify(sdk, dest_id)
     print(f"\n✓ Done — snapshot saved to snapshot_{dest_id}.json")
-
-    snapshot(sdk, dest_id, dry_run)
-    copy_vis_config_from_source(sdk, source_id, dest_id, dry_run)
-    fix_dashboard_filters(sdk, dest_id, dry_run)
-    swap_and_fix_tiles(sdk, dest_id, dry_run)
-    reconnect_dashboard_filters(sdk, source_id, dest_id, dry_run)
     verify(sdk, dest_id)
     print(f"\n✓ Done — snapshot saved to snapshot_{dest_id}.json")
