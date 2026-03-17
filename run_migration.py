@@ -87,6 +87,7 @@ FIELD_MAP = {
 def parse_args():
     p = argparse.ArgumentParser(description="Looker dashboard migration tool")
     p.add_argument("--source",        required=False, default=None, help="Source dashboard ID (copy FROM)")
+    p.add_argument("--batch",         nargs="+", metavar="ID", help="Validate multiple source dashboard IDs (or SOURCE:DEST pairs)")
     p.add_argument("--dest",          required=False, default=None, help="Destination dashboard ID (copy TO)")
     p.add_argument("--dry-run",       action="store_true", help="Preview changes without writing")
     p.add_argument("--validate",      action="store_true", help="Check source dashboard tiles for unmapped fields")
@@ -649,6 +650,87 @@ if __name__ == "__main__":
     sdk.update_git_branch(project_id="super_big_facts", body=models.WriteGitBranch(name="v2-migration"))
 
     dry_run   = args.dry_run
+    # --batch: validate multiple dashboards, deduped missing fields
+    if args.batch:
+        from collections import defaultdict
+        missing = defaultdict(lambda: {"new_field": None, "dashboards": defaultdict(set)})
+        statuses = {}
+
+        print(f"\n=== Batch Pre-Migration Check: {len(args.batch)} dashboards ===\n")
+
+        # Load explore fields once
+        explore = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
+        all_explore_fields = set()
+        for f in (explore.fields.dimensions or []):
+            all_explore_fields.add(f.name)
+        for f in (explore.fields.measures or []):
+            all_explore_fields.add(f.name)
+
+        for entry in args.batch:
+            src, dst = entry.split(":", 1) if ":" in entry else (entry, None)
+            label = f"{src} -> {dst}" if dst else src
+            print(f"Checking {label}...", end=" ", flush=True)
+
+            try:
+                elements = sdk.dashboard_dashboard_elements(src)
+            except Exception as e:
+                print(f"❌ could not fetch: {e}")
+                statuses[label] = "❌"
+                continue
+
+            dashboard_issues = False
+            for el in elements:
+                if not el.query_id:
+                    continue
+                q = sdk.query(str(el.query_id))
+                el_fields = set(q.fields or []) | set((q.filters or {}).keys())
+                if q.dynamic_fields:
+                    try:
+                        for d in json.loads(q.dynamic_fields):
+                            if d.get("based_on"):
+                                el_fields.add(d["based_on"])
+                    except Exception:
+                        pass
+                tile = el.title or "(untitled)"
+                for f in el_fields:
+                    if f not in FIELD_MAP and f.split(".")[0] not in JOINED_VIEWS_IN_NEW_EXPLORE:
+                        missing[f]["new_field"] = None
+                        missing[f]["dashboards"][label].add(tile)
+                        dashboard_issues = True
+                for old_field, new_field in FIELD_MAP.items():
+                    if old_field in el_fields and new_field not in all_explore_fields:
+                        missing[old_field]["new_field"] = new_field
+                        missing[old_field]["dashboards"][label].add(tile)
+                        dashboard_issues = True
+
+            statuses[label] = "⚠️" if dashboard_issues else "✅"
+            print(statuses[label])
+
+        print()
+        if missing:
+            print("=== Missing Fields ===")
+            for i, (old_field, info) in enumerate(missing.items(), 1):
+                new_field = info["new_field"]
+                if new_field:
+                    print(f"{i}. {old_field} -> ❌ {new_field} (missing in new explore)")
+                else:
+                    print(f"{i}. {old_field} — not in FIELD_MAP")
+                for dash, tiles in info["dashboards"].items():
+                    tile_list = ", ".join(f"'{t}'" for t in sorted(tiles))
+                    print(f"   dashboard {dash}: {tile_list}")
+        else:
+            print("✅ All dashboards clean — safe to migrate")
+
+        print()
+        ready = sum(1 for s in statuses.values() if s == "✅")
+        needs = sum(1 for s in statuses.values() if s == "⚠️")
+        print("=== Summary ===")
+        if ready:
+            print(f"✅ {ready} dashboard(s) ready to migrate")
+        if needs:
+            print(f"⚠️  {needs} dashboard(s) need attention — fix fields above then re-run")
+        sys.exit(0)
+
     source_id = args.source
     dest_id   = args.dest
 
