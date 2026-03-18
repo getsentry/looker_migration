@@ -683,19 +683,11 @@ if __name__ == "__main__":
                 if not el.query_id:
                     continue
                 q = sdk.query(str(el.query_id))
-                el_fields = set(q.fields or []) | set((q.filters or {}).keys())
-                if q.dynamic_fields:
-                    try:
-                        for d in json.loads(q.dynamic_fields):
-                            if d.get("based_on"):
-                                el_fields.add(d["based_on"])
-                    except Exception:
-                        pass
-                # Skip tiles not on the old product_facts explore — they are unrelated
-                if q.view != OLD_EXPLORE:
+                # Skip tiles not on the old product_facts explore
+                if q.model != OLD_MODEL or q.view != OLD_EXPLORE:
                     continue
-                tile = el.title or "(untitled)"
-                # Collect based_on fields from dynamic fields (table calcs, custom measures)
+                el_fields = set(q.fields or []) | set((q.filters or {}).keys())
+                # Collect based_on fields from dynamic fields
                 based_on_fields = set()
                 if q.dynamic_fields:
                     try:
@@ -704,20 +696,24 @@ if __name__ == "__main__":
                                 based_on_fields.add(d["based_on"])
                     except Exception:
                         pass
-                # Only check real LookML fields (view.field format), skip calc names
-                lookml_fields = {f for f in el_fields if "." in f}
-                lookml_fields |= based_on_fields
+                tile = el.title or "(untitled)"
+                # Only real LookML fields, skip table calc names like __calc__
+                lookml_fields = {f for f in el_fields if "." in f and not f.startswith("__")}
+                lookml_fields |= {f for f in based_on_fields if "." in f and not f.startswith("__")}
                 for f in lookml_fields:
-                    if f not in FIELD_MAP and f.split(".")[0] not in JOINED_VIEWS_IN_NEW_EXPLORE:
+                    new_field = FIELD_MAP.get(f)
+                    if new_field:
+                        # Field is mapped — check the destination exists in new explore
+                        if new_field not in all_explore_fields:
+                            missing[f]["new_field"] = new_field
+                            missing[f]["dashboards"][label].add(tile)
+                            dashboard_issues = True
+                    elif f not in all_explore_fields:
+                        # Field is not mapped and not in new explore — genuinely missing
                         missing[f]["new_field"] = None
                         missing[f]["dashboards"][label].add(tile)
                         dashboard_issues = True
-                for old_field, new_field in FIELD_MAP.items():
-                    if old_field in lookml_fields and new_field not in all_explore_fields:
-                        missing[old_field]["new_field"] = new_field
-                        missing[old_field]["dashboards"][label].add(tile)
-                        dashboard_issues = True
-
+                    # else: field exists in new explore already, no action needed
             statuses[label] = "⚠️" if dashboard_issues else "✅"
             print(statuses[label])
 
