@@ -684,7 +684,7 @@ if __name__ == "__main__":
                     continue
                 q = sdk.query(str(el.query_id))
                 # Skip tiles not on the old product_facts explore
-                if q.model != OLD_MODEL or q.view != OLD_EXPLORE:
+                if q.model != "super_big_facts" or q.view != OLD_EXPLORE:
                     continue
                 el_fields = set(q.fields or []) | set((q.filters or {}).keys())
                 # Collect based_on fields from dynamic fields
