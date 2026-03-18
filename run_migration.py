@@ -691,6 +691,9 @@ if __name__ == "__main__":
                                 el_fields.add(d["based_on"])
                     except Exception:
                         pass
+                # Skip tiles not on the old product_facts explore — they are unrelated
+                if q.view != OLD_EXPLORE:
+                    continue
                 tile = el.title or "(untitled)"
                 # Collect based_on fields from dynamic fields (table calcs, custom measures)
                 based_on_fields = set()
@@ -703,10 +706,9 @@ if __name__ == "__main__":
                         pass
                 # Only check real LookML fields (view.field format), skip calc names
                 lookml_fields = {f for f in el_fields if "." in f}
-                # Add based_on fields so we validate the underlying LookML they depend on
                 lookml_fields |= based_on_fields
                 for f in lookml_fields:
-                    if f not in FIELD_MAP and f.split(".")[0] not in JOINED_VIEWS_IN_NEW_EXPLORE and f not in all_explore_fields:
+                    if f not in FIELD_MAP and f.split(".")[0] not in JOINED_VIEWS_IN_NEW_EXPLORE:
                         missing[f]["new_field"] = None
                         missing[f]["dashboards"][label].add(tile)
                         dashboard_issues = True
