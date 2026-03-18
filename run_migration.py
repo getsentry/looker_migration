@@ -574,6 +574,21 @@ def remap_dynamic_fields(dynamic_fields_str):
             c["args"] = [FIELD_MAP.get(a, a) if isinstance(a, str) else a for a in c["args"]]
     return json.dumps(customs)
 
+# Populated at runtime with all fields from the new explore
+_NEW_EXPLORE_FIELDS = set()
+_NEW_EXPLORE_VIEWS = set()
+
+def load_explore_fields(sdk):
+    """Load all fields from the new explore into module-level sets for is_problem_field."""
+    global _NEW_EXPLORE_FIELDS, _NEW_EXPLORE_VIEWS
+    explore = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
+    for f in (explore.fields.dimensions or []):
+        _NEW_EXPLORE_FIELDS.add(f.name)
+        _NEW_EXPLORE_VIEWS.add(f.name.split(".")[0])
+    for f in (explore.fields.measures or []):
+        _NEW_EXPLORE_FIELDS.add(f.name)
+        _NEW_EXPLORE_VIEWS.add(f.name.split(".")[0])
+
 def is_problem_field(field):
     """Returns True if a field needs to be flagged — it's from OLD_EXPLORE and unmapped,
     or from a view that isn't joined into the new explore."""
@@ -584,6 +599,10 @@ def is_problem_field(field):
         return False  # explicitly remapped, fine
     if view == OLD_EXPLORE:
         return True   # from old explore and not remapped
+    # If we have explore fields loaded, use them for accurate checking
+    if _NEW_EXPLORE_VIEWS:
+        return view not in _NEW_EXPLORE_VIEWS
+    # Fallback to hardcoded set
     if view not in JOINED_VIEWS_IN_NEW_EXPLORE:
         return True   # from a view not available in new explore
     return False
@@ -1159,6 +1178,7 @@ if __name__ == "__main__":
             print(f"⚠️  {needs} dashboard(s) need attention — fix fields above then re-run")
         sys.exit(0)
 
+    load_explore_fields(sdk)
     source_id = args.source
     dest_id   = args.dest
 
