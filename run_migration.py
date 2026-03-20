@@ -647,7 +647,10 @@ if __name__ == "__main__":
     args = parse_args()
     sdk = looker_sdk.init40(config_file=args.ini)
     sdk.update_session(models.WriteApiSession(workspace_id="dev"))
-    sdk.update_git_branch(project_id="super_big_facts", body=models.WriteGitBranch(name="v2-migration"))
+    try:
+        sdk.update_git_branch(project_id="super_big_facts", body=models.WriteGitBranch(name="v2-migration"))
+    except Exception as e:
+        print(f"⚠️  Could not switch to v2-migration branch (proceeding on current branch): {e}")
 
     dry_run   = args.dry_run
     # --batch: validate multiple dashboards, deduped missing fields
