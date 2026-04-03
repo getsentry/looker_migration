@@ -1094,13 +1094,9 @@ if __name__ == "__main__":
 
         print(f"\n=== Batch Pre-Migration Check: {len(args.batch)} dashboards ===\n")
 
-        # Load explore fields once
-        explore = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
-        all_explore_fields = set()
-        for f in (explore.fields.dimensions or []):
-            all_explore_fields.add(f.name)
-        for f in (explore.fields.measures or []):
-            all_explore_fields.add(f.name)
+        # Load explore fields once using the shared loader
+        load_explore_fields(sdk)
+        all_explore_fields = _NEW_EXPLORE_FIELDS
 
         for entry in args.batch:
             src, dst = entry.split(":", 1) if ":" in entry else (entry, None)
