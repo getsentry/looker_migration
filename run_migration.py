@@ -574,9 +574,13 @@ def remap_dynamic_fields(dynamic_fields_str):
             c["args"] = [FIELD_MAP.get(a, a) if isinstance(a, str) else a for a in c["args"]]
     return json.dumps(customs)
 
+# Populated at runtime after SDK is initialized and dev mode is set
+_EXPLORE_FIELDS = set()
+_EXPLORE_VIEWS = set()
+
 def is_problem_field(field):
     """Returns True if a field needs to be flagged — it's from OLD_EXPLORE and unmapped,
-    or from a view that isn't joined into the new explore."""
+    or from a view that isn't in the new explore (checked via API if available)."""
     if not field or "." not in field:
         return False
     view = field.split(".")[0]
@@ -584,9 +588,11 @@ def is_problem_field(field):
         return False  # explicitly remapped, fine
     if view == OLD_EXPLORE:
         return True   # from old explore and not remapped
-    if view not in JOINED_VIEWS_IN_NEW_EXPLORE:
-        return True   # from a view not available in new explore
-    return False
+    # Use API-loaded explore fields if available
+    if _EXPLORE_VIEWS:
+        return view not in _EXPLORE_VIEWS
+    # Fallback to hardcoded set
+    return view not in JOINED_VIEWS_IN_NEW_EXPLORE
 
 
 
@@ -1065,6 +1071,18 @@ if __name__ == "__main__":
     sdk = looker_sdk.init40(config_file=args.ini)
     sdk.update_session(models.WriteApiSession(workspace_id="dev"))
     sdk.update_git_branch(project_id="super_big_facts", body=models.WriteGitBranch(name="v2-migration"))
+
+    # Load all fields from new explore into module-level sets for is_problem_field
+    try:
+        _exp = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
+        for _f in (_exp.fields.dimensions or []):
+            _EXPLORE_FIELDS.add(_f.name)
+            _EXPLORE_VIEWS.add(_f.name.split(".")[0])
+        for _f in (_exp.fields.measures or []):
+            _EXPLORE_FIELDS.add(_f.name)
+            _EXPLORE_VIEWS.add(_f.name.split(".")[0])
+    except Exception as _e:
+        print(f"⚠️  Could not load explore fields: {_e}")
 
     dry_run   = args.dry_run
     # --batch: validate multiple dashboards, deduped missing fields
