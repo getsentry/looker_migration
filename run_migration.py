@@ -167,7 +167,7 @@ FIELD_MAP = {
     "product_facts.spans_utilization_rate": "projects_data_outcomes.spans_utilization_rate",
     "product_facts.transactions_utilization_rate": "projects_data_outcomes.transactions_utilization_rate",
     "product_facts.errors_utilization_rate": "projects_data_outcomes.errors_utilization_rate",
-    "product_facts.logs_accepted_28d": "projects_data_outcomes.logs_accepted_28d",
+    "product_facts.logs_accepted_28d": "projects_data_outcomes.logs_bytes_accepted_28d",
     "product_facts.org_active_users_28d": "organizations_active_users.org_active_users_28d",
     "product_facts.spans_accepted_28d": "organizations_data_outcomes.spans_accepted_28d",
     "billing_model.sum_total_churn_arr": "daily_arr_changes_org.sum_total_churn_arr",
