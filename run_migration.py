@@ -30,9 +30,10 @@ from looker_sdk import models40 as models
 # ─────────────────────────────────────────────
 # EXPLORES — update for your migration
 # ─────────────────────────────────────────────
-OLD_EXPLORE = "product_facts"
-NEW_MODEL   = "super_big_facts"
-NEW_EXPLORE = "product_usage_org_proj"
+OLD_EXPLORE  = "product_facts"
+NEW_MODEL    = "super_big_facts"
+NEW_EXPLORE  = "product_usage_org_proj"
+NEW_EXPLORE_2 = "product_usage_sdk"
 
 # ─────────────────────────────────────────────
 # VIEWS joined into NEW_EXPLORE
@@ -498,8 +499,46 @@ def remap_dynamic_fields(dynamic_fields_str):
     return json.dumps(customs)
 
 # Populated at runtime after SDK is initialized and dev mode is set
-_EXPLORE_FIELDS = set()
 _EXPLORE_VIEWS = set()
+_EXCLUSIVE_1 = set()   # views only in NEW_EXPLORE
+_EXCLUSIVE_2 = set()   # views only in NEW_EXPLORE_2
+
+
+def build_explore_view_sets(sdk):
+    """Fetch both explores from the API and return their view sets.
+
+    Returns:
+        (views1, views2, exclusive1, exclusive2) where exclusive1/exclusive2
+        are the views that appear in only one explore.
+    """
+    def _views(exp):
+        fields = (exp.fields.dimensions or []) + (exp.fields.measures or [])
+        return {f.name.split(".")[0] for f in fields}
+
+    exp1 = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
+    exp2 = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE_2, fields="fields")
+    views1 = _views(exp1)
+    views2 = _views(exp2)
+    return views1, views2, views1 - views2, views2 - views1
+
+
+def route_explore(fields, exclusive1, exclusive2):
+    """Pick the right explore for a tile based on its fields.
+
+    Scans fields for the first view that appears exclusively in one explore.
+    Falls back to NEW_EXPLORE if no exclusive view is found, and logs a warning
+    since those tiles reference only shared views — the fallback may be wrong.
+    """
+    for f in (fields or []):
+        if "." not in f:
+            continue
+        view = f.split(".")[0]
+        if view in exclusive2:
+            return NEW_EXPLORE_2
+        if view in exclusive1:
+            return NEW_EXPLORE
+    print(f"  ⚠️  route_explore: no exclusive view found in fields {fields} — defaulting to {NEW_EXPLORE}")
+    return NEW_EXPLORE
 
 def is_problem_field(field):
     """Returns True if a field needs to be flagged — it's from OLD_EXPLORE and unmapped,
@@ -685,14 +724,15 @@ def snapshot(sdk, dest_id, dry_run):
 # ─────────────────────────────────────────────
 def copy_vis_config_from_source(sdk, source_id, dest_id, dry_run):
     print(f"\n=== Step 1b: Copy vis_config from source dashboard {source_id} ===")
-    # Cache explore fields once for WILL BREAK checks
+    # Cache explore fields once for WILL BREAK checks (both explores)
     try:
-        _exp = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
         _explore_fields = set()
-        for _f in (_exp.fields.dimensions or []):
-            _explore_fields.add(_f.name)
-        for _f in (_exp.fields.measures or []):
-            _explore_fields.add(_f.name)
+        for _explore_name in (NEW_EXPLORE, NEW_EXPLORE_2):
+            _exp = sdk.lookml_model_explore(NEW_MODEL, _explore_name, fields="fields")
+            for _f in (_exp.fields.dimensions or []):
+                _explore_fields.add(_f.name)
+            for _f in (_exp.fields.measures or []):
+                _explore_fields.add(_f.name)
     except Exception:
         _explore_fields = set()
 
@@ -828,10 +868,14 @@ def swap_and_fix_tiles(sdk, dest_id, dry_run):
                     print(f"  ⚠️  WILL BREAK '{el.title}' — sort not available in new explore: {s}")
             print(f"  [DRY RUN] Would swap '{el.title}'")
             continue
+        target_explore = route_explore(
+            list(q.fields or []) + list((q.filters or {}).keys()),
+            _EXCLUSIVE_1, _EXCLUSIVE_2,
+        )
         new_query = sdk.create_query(
             models.WriteQuery(
                 model=NEW_MODEL,
-                view=NEW_EXPLORE,
+                view=target_explore,
                 fields=remap_fields(q.fields, el.title),
                 filters=remap_filters(q.filters, el.title),
                 sorts=remap_sorts(q.sorts),
@@ -998,15 +1042,12 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"⚠️  Could not switch to v2-migration branch (proceeding on current branch): {e}")
 
-    # Load all fields from new explore into module-level sets for is_problem_field
+    # Load both explore view sets for routing and is_problem_field
     try:
-        _exp = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
-        for _f in (_exp.fields.dimensions or []):
-            _EXPLORE_FIELDS.add(_f.name)
-            _EXPLORE_VIEWS.add(_f.name.split(".")[0])
-        for _f in (_exp.fields.measures or []):
-            _EXPLORE_FIELDS.add(_f.name)
-            _EXPLORE_VIEWS.add(_f.name.split(".")[0])
+        _views1, _views2, _excl1, _excl2 = build_explore_view_sets(sdk)
+        _EXCLUSIVE_1.update(_excl1)
+        _EXCLUSIVE_2.update(_excl2)
+        _EXPLORE_VIEWS.update(_views1 | _views2)
     except Exception as _e:
         print(f"⚠️  Could not load explore fields: {_e}")
 
@@ -1019,13 +1060,14 @@ if __name__ == "__main__":
 
         print(f"\n=== Batch Pre-Migration Check: {len(args.batch)} dashboards ===\n")
 
-        # Load explore fields once
-        explore = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
+        # Load explore fields once (both explores)
         all_explore_fields = set()
-        for f in (explore.fields.dimensions or []):
-            all_explore_fields.add(f.name)
-        for f in (explore.fields.measures or []):
-            all_explore_fields.add(f.name)
+        for _explore_name in (NEW_EXPLORE, NEW_EXPLORE_2):
+            _exp = sdk.lookml_model_explore(NEW_MODEL, _explore_name, fields="fields")
+            for f in (_exp.fields.dimensions or []):
+                all_explore_fields.add(f.name)
+            for f in (_exp.fields.measures or []):
+                all_explore_fields.add(f.name)
 
         for entry in args.batch:
             src, dst = entry.split(":", 1) if ":" in entry else (entry, None)
