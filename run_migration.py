@@ -215,7 +215,7 @@ FIELD_MAP = {
     "product_facts.frontend_profile_duration_accepted_28d": "projects_data_outcomes.frontend_profile_duration_accepted_28d",
     "product_facts.first_ui_profile_date_date": "organizations_feature_adoption_dates.first_ui_profile_date_date",
     "product_facts.front_end_profile_duration_accepted_sum": "projects_data_outcomes.frontend_profile_duration_accepted",
-    "product_facts.profile_duration_accepted_sum": "projects_data_outcomes.profile_duration_accepted_sum",
+    "product_facts.profile_duration_accepted_sum": "projects_data_outcomes.profile_duration_accepted",
     "product_facts.total_profile_duration_accepted_sum": "organizations_data_outcomes.profile_duration_accepted",
     "data_by_sdk.pduration_frontend_28d_sdk_family": "sdk_base_events.pduration_frontend_28d_proj_sdkfamily",
     "data_by_sdk.sdk_family": "sdk_map_new.language_family",
