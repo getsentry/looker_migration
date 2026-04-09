@@ -444,9 +444,12 @@ def parse_args():
     p.add_argument("--batch",         nargs="+", metavar="ID", help="Validate multiple source dashboard IDs (or SOURCE:DEST pairs)")
     p.add_argument("--dest",          required=False, default=None, help="Destination dashboard ID (copy TO)")
     p.add_argument("--dry-run",       action="store_true", help="Preview changes without writing")
-    p.add_argument("--validate",      action="store_true", help="Check source dashboard tiles for unmapped fields")
-    p.add_argument("--check-explore", action="store_true", help="Verify all FIELD_MAP destinations and JOINED_VIEWS exist in new explore")
+    p.add_argument("--check",         action="store_true", help="Check source dashboard fields against the destination explore (API-based, grouped by tile)")
+    p.add_argument("--validate",      action="store_true", help="[deprecated] Alias for --check")
+    p.add_argument("--check-explore", action="store_true", help="[deprecated] Alias for --check")
+    p.add_argument("--audit",         action="store_true", help="[deprecated] Alias for --check")
     p.add_argument("--ini",           default="looker.ini", help="Path to looker.ini (default: ./looker.ini)")
+    p.add_argument("--production",    action="store_true", help="Run against production (skip dev session and git branch switch)")
     p.add_argument("--explore-from",  default="product_facts", help="Old explore name (default: product_facts)")
     p.add_argument("--explore-to",    default="product_usage_org_proj", help="New explore name (default: product_usage_org_proj)")
     p.add_argument("--model",         default="super_big_facts", help="New model name (default: super_big_facts)")
@@ -456,7 +459,7 @@ def parse_args():
 # ─────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────
-def extract_vis_config(element):
+def extract_vis_config(element, query=None):
     vc = getattr(element, "vis_config", None)
     if vc and isinstance(vc, dict) and vc.get("type"):
         return vc, "element.vis_config"
@@ -465,6 +468,10 @@ def extract_vis_config(element):
         vc = getattr(rm, "vis_config", None)
         if vc and isinstance(vc, dict) and vc.get("type"):
             return vc, "result_maker.vis_config"
+    if query:
+        vc = getattr(query, "vis_config", None)
+        if vc and isinstance(vc, dict) and vc.get("type"):
+            return vc, "query.vis_config"
     return None, "not found"
 
 def remap_fields(fields, tile_title=None):
@@ -539,125 +546,144 @@ def is_problem_field(field):
 
 
 def check_explore(sdk, source_id):
-    """Verify all FIELD_MAP destinations and JOINED_VIEWS exist in the new explore."""
-    print(f"\n=== Checking fields exist in {NEW_MODEL}/{NEW_EXPLORE} ===")
-    # Only check fields actually used in this dashboard
-    elements = sdk.dashboard_dashboard_elements(source_id)
-    used_old_fields = set()
-    for el in elements:
-        if not el.query_id:
-            continue
-        q = sdk.query(str(el.query_id))
-        for f in (q.fields or []):
-            used_old_fields.add(f)
-        for f in (q.filters or {}).keys():
-            used_old_fields.add(f)
-        if q.dynamic_fields:
-            try:
-                for d in json.loads(q.dynamic_fields):
-                    if d.get("based_on"):
-                        used_old_fields.add(d["based_on"])
-            except Exception:
-                pass
-
-    explore = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
-    all_fields = set()
-    for f in (explore.fields.dimensions or []):
-        all_fields.add(f.name)
-    for f in (explore.fields.measures or []):
-        all_fields.add(f.name)
-    all_views = {f.split(".")[0] for f in all_fields}
-    # map of (old_field, new_field) -> list of tile names
-    missing_fields = {}
-    for el in elements:
-        if not el.query_id:
-            continue
-        q = sdk.query(str(el.query_id))
-        el_fields = set(q.fields or []) | set((q.filters or {}).keys())
-        if q.dynamic_fields:
-            try:
-                for d in json.loads(q.dynamic_fields):
-                    if d.get("based_on"):
-                        el_fields.add(d["based_on"])
-            except Exception:
-                pass
-        for old_field, new_field in FIELD_MAP.items():
-            if old_field in el_fields and new_field not in all_fields:
-                key = (old_field, new_field)
-                tile_name = el.title or "(untitled tile)"
-                missing_fields.setdefault(key, set()).add(tile_name)
-    issues = []
-    for (old_field, new_field), tiles in missing_fields.items():
-        tile_list = ", ".join(f"'{t}'" for t in sorted(tiles))
-        issues.append(f"  {old_field} -> ❌ {new_field} (used in: {tile_list})")
-    for view in JOINED_VIEWS_IN_NEW_EXPLORE:
-        if view not in all_views:
-            issues.append(f"  JOINED_VIEWS_IN_NEW_EXPLORE view not found in explore: ❌ {view}")
-    if issues:
-        print("\u26a0\ufe0f  Issues found — check if these tiles matter to your migration:")
-        for i in issues:
-            print(i)
-        return False
-    print(f"  \u2705 All relevant mapped fields confirmed in new explore")
-    return True
+    """Deprecated — use check()."""
+    print("(--check-explore is deprecated; running --check instead)")
+    return check(sdk, source_id)
 
 def validate(sdk, source_id):
-    print(f"\n=== Validating source dashboard {source_id} ===")
+    """Deprecated — use check()."""
+    print("(--validate is deprecated; running --check instead)")
+    return check(sdk, source_id)
+
+
+# ─────────────────────────────────────────────
+# CHECK
+# ─────────────────────────────────────────────
+def check(sdk, source_id):
+    print(f"\n=== Checking source dashboard {source_id} against {NEW_MODEL}/{NEW_EXPLORE} ===\n")
+
+    try:
+        exp = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields,joins")
+    except Exception as e:
+        print(f"❌ Could not load explore {NEW_MODEL}/{NEW_EXPLORE}: {e}")
+        sys.exit(1)
+
+    dest_fields = set()
+    for f in (exp.fields.dimensions or []):
+        dest_fields.add(f.name)
+    for f in (exp.fields.measures or []):
+        dest_fields.add(f.name)
+
+    # Views that are actually joined into the explore
+    dest_views = {f.split(".")[0] for f in dest_fields}
+    if exp.joins:
+        for j in exp.joins:
+            if j.name:
+                dest_views.add(j.name)
+
     elements = sdk.dashboard_dashboard_elements(source_id)
-    issues = []
+
+    # Deduped summary buckets
+    summary_bad          = {}   # old_field -> dest_field
+    summary_missing_join = set()
+    summary_missing_field = set()
+    summary_needs_mapping = set()
 
     for el in elements:
         if not el.query_id:
             continue
         q = sdk.query(str(el.query_id))
-        if q.view != OLD_EXPLORE:
-            continue
+        tile_title = el.title or "(untitled)"
 
+        fields = set()
         for f in (q.fields or []):
-            if is_problem_field(f):
-                issues.append(f"  Tile '{el.title}' — unmapped field: {f}")
-
+            if "." in f and not f.startswith("__"):
+                fields.add(f)
         for f in (q.filters or {}).keys():
-            if is_problem_field(f):
-                issues.append(f"  Tile '{el.title}' — unmapped filter: {f}")
-
+            if "." in f and not f.startswith("__"):
+                fields.add(f)
         for s in (q.sorts or []):
-            field = s.split(" ")[0]
-            if is_problem_field(field):
-                issues.append(f"  Tile '{el.title}' — unmapped sort: {s}")
-
+            f = s.split(" ")[0]
+            if "." in f and not f.startswith("__"):
+                fields.add(f)
         if q.dynamic_fields:
             try:
                 for d in json.loads(q.dynamic_fields):
-                    label = d.get("label") or d.get("table_calculation") or "(unnamed)"
-                    based_on = d.get("based_on", "")
-                    if based_on and is_problem_field(based_on):
-                        issues.append(f"  Tile '{el.title}' — dynamic field '{label}' based_on not available: {based_on}")
-                    for ref in re.findall(r'\$\{([^}]+)\}', d.get("expression") or ""):
-                        if is_problem_field(ref):
-                            issues.append(f"  Tile '{el.title}' — dynamic field '{label}' expression references: {ref}")
-                    for fk in (d.get("filters") or {}).keys():
-                        if is_problem_field(fk):
-                            issues.append(f"  Tile '{el.title}' — dynamic field '{label}' filter not available: {fk}")
-            except Exception as e:
-                issues.append(f"  Tile '{el.title}' — could not parse dynamic_fields: {e}")
+                    f = d.get("based_on", "")
+                    if f and "." in f and not f.startswith("__"):
+                        fields.add(f)
+            except Exception:
+                pass
 
-    # Deduplicate
-    seen, deduped = set(), []
-    for i in issues:
-        if i not in seen:
-            seen.add(i)
-            deduped.append(i)
+        if not fields:
+            continue
 
-    if deduped:
-        print("⚠️  Issues found — resolve before migrating:")
-        for i in deduped:
-            print(i)
-        print("\nTo fix: either add the field to FIELD_MAP, or add its view to JOINED_VIEWS_IN_NEW_EXPLORE if it exists in the new explore.")
-        return False
+        ok, mapped, bad = [], [], []
+        missing_join, missing_field, needs_mapping = [], [], []
+
+        for f in sorted(fields):
+            if f in dest_fields:
+                ok.append(f)
+            elif f in FIELD_MAP:
+                dest = FIELD_MAP[f]
+                if dest in dest_fields:
+                    mapped.append((f, dest))
+                else:
+                    bad.append((f, dest))
+                    summary_bad[f] = dest
+            else:
+                view = f.split(".")[0]
+                if view not in dest_views:
+                    missing_join.append(f)
+                    summary_missing_join.add(f)
+                else:
+                    missing_field.append(f)
+                    summary_missing_field.add(f)
+
+        print(f"  Tile: '{tile_title}'")
+        for f in ok:
+            print(f"    ✅ {f}")
+        for f, dest in mapped:
+            print(f"    ✅ {f} → {dest}")
+        for f, dest in bad:
+            print(f"    ❌ {f} → {dest}  (FIELD_MAP destination not in explore)")
+        for f in missing_join:
+            print(f"    🔴 {f}  (view not joined into explore)")
+        for f in missing_field:
+            print(f"    🟡 {f}  (view is joined but field doesn't exist in LookML)")
+        for f in needs_mapping:
+            print(f"    ⚠️  {f}  (exists in explore but not in FIELD_MAP)")
+        print()
+
+    any_issues = summary_bad or summary_missing_join or summary_missing_field or summary_needs_mapping
+    print("=== Summary ===")
+    if not any_issues:
+        print("✅ All fields accounted for.")
     else:
-        print("✅ All fields are mapped — safe to migrate")
-        return True
+        if summary_bad:
+            print("❌ Bad mappings (FIELD_MAP destination missing from explore):")
+            for old, dest in sorted(summary_bad.items()):
+                print(f"   {old} → {dest}")
+        if summary_missing_join:
+            print("🔴 Missing joins (view not joined into explore — fix in LookML explore definition):")
+            for f in sorted(summary_missing_join):
+                print(f"   {f}")
+        if summary_missing_field:
+            print("🟡 Missing fields (view is joined but dimension/measure needs to be written in LookML):")
+            for f in sorted(summary_missing_field):
+                print(f"   {f}")
+        if summary_needs_mapping:
+            print("⚠️  Needs mapping (field exists in explore but is missing from FIELD_MAP):")
+            for f in sorted(summary_needs_mapping):
+                print(f"   {f}")
+
+    return not any_issues
+
+
+def audit(sdk, source_id):
+    """Deprecated — use check()."""
+    print("(--audit is deprecated; running --check instead)")
+    return check(sdk, source_id)
 
 
 # ─────────────────────────────────────────────
@@ -671,7 +697,7 @@ def snapshot(sdk, dest_id, dry_run):
         if not el.query_id:
             continue
         q = sdk.query(str(el.query_id))
-        vc, loc = extract_vis_config(el)
+        vc, loc = extract_vis_config(el, q)
         if not vc:
             print(f"  ⚠️  '{el.title}' — vis_config not found")
         else:
@@ -831,7 +857,7 @@ def swap_and_fix_tiles(sdk, dest_id, dry_run):
         if q.view != OLD_EXPLORE:
             print(f"  Skipping '{el.title}' — already on: {q.view}")
             continue
-        vc, _ = extract_vis_config(el)
+        vc, _ = extract_vis_config(el, q)
         if dry_run:
             # Check for fields that would break even in dry run mode
             for f in (q.fields or []):
@@ -972,7 +998,7 @@ def verify(sdk, dest_id):
                 field = sort.split(" ")[0]
                 if is_problem_field(field):
                     issues.append(f"Tile '{el.title}' sort: {sort}")
-        vc, loc = extract_vis_config(el)
+        vc, loc = extract_vis_config(el, q)
         if not vc:
             issues.append(f"Tile '{el.title}' missing vis_config — may show as Table (Legacy)")
         else:
@@ -1015,8 +1041,14 @@ if __name__ == "__main__":
     NEW_EXPLORE = args.explore_to
     FIELD_MAP   = get_field_map()
 
-    sdk.update_session(models.WriteApiSession(workspace_id="dev"))
-    sdk.update_git_branch(project_id=NEW_MODEL, body=models.WriteGitBranch(name="v2-migration"))
+    # --check runs against production — do it before switching to dev
+    if args.check or args.audit or args.validate or args.check_explore:
+        ok = check(sdk, args.source)
+        sys.exit(0 if ok else 1)
+
+    if not args.production:
+        sdk.update_session(models.WriteApiSession(workspace_id="dev"))
+        sdk.update_git_branch(project_id=NEW_MODEL, body=models.WriteGitBranch(name="v2-migration"))
 
     # Load all fields from new explore into module-level sets for is_problem_field
     try:
@@ -1127,16 +1159,6 @@ if __name__ == "__main__":
     dest_id   = args.dest
 
     print(f"\n{'[DRY RUN] ' if dry_run else ''}Migrating dashboard {source_id} → {dest_id}")
-
-    # --check-explore: verify FIELD_MAP destinations and JOINED_VIEWS exist in new explore
-    if args.check_explore:
-        ok = check_explore(sdk, source_id)
-        sys.exit(0 if ok else 1)
-
-    # --validate: check source dashboard tiles for unmapped fields
-    if args.validate:
-        ok = validate(sdk, source_id)
-        sys.exit(0 if ok else 1)
 
     # full migration (dry-run or live)
     snapshot(sdk, dest_id, dry_run)
