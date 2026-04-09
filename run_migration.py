@@ -872,6 +872,10 @@ def swap_and_fix_tiles(sdk, dest_id, dry_run):
             print(f"  Skipping '{el.title}' — already on: {q.view}")
             continue
         vc, _ = extract_vis_config(el)
+        target_explore = route_explore(
+            list(q.fields or []) + list((q.filters or {}).keys()),
+            _EXCLUSIVE_1, _EXCLUSIVE_2,
+        )
         if dry_run:
             # Check for fields that would break even in dry run mode
             for f in (q.fields or []):
@@ -883,12 +887,8 @@ def swap_and_fix_tiles(sdk, dest_id, dry_run):
             for s in (q.sorts or []):
                 if is_problem_field(s.split(" ")[0]):
                     print(f"  ⚠️  WILL BREAK '{el.title}' — sort not available in new explore: {s}")
-            print(f"  [DRY RUN] Would swap '{el.title}'")
+            print(f"  [DRY RUN] Would swap '{el.title}' → {target_explore}")
             continue
-        target_explore = route_explore(
-            list(q.fields or []) + list((q.filters or {}).keys()),
-            _EXCLUSIVE_1, _EXCLUSIVE_2,
-        )
         new_query = sdk.create_query(
             models.WriteQuery(
                 model=NEW_MODEL,
