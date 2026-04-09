@@ -80,10 +80,11 @@ JOINED_VIEWS_IN_NEW_EXPLORE = {
 }
 
 # ─────────────────────────────────────────────
-# FIELD MAP — fields that need remapping old → new
+# FIELD MAPS — keyed by (old_explore, new_explore)
 # Fields from joined views that haven't changed don't need to be listed here
 # ─────────────────────────────────────────────
-FIELD_MAP = {
+FIELD_MAPS = {
+("product_facts", "product_usage_org_proj"): {
     "product_facts.organizations_count":        "product_facts_v2_base.count",
     "product_facts.active_organizations_count": "organizations.active_organizations_count",
     "product_facts.dt_date":                    "product_facts_v2_base.dt_date",
@@ -109,7 +110,6 @@ FIELD_MAP = {
     # "project_uptime_details.total_active_monitors":           "???",
     # === additional mappings ===
     "product_facts.dt_week": "product_facts_v2_base.dt_week",
-    "per_product_trial_flags.in_seer_trial": "per_product_trials_flags.in_seer_trial",
     "new_seer_orgs.estimated_seats": "organizations_seer.estimated_seats",
     "product_facts_org_seer_user_rollup.billable_seats_28d": "users_seer.billable_seats_28d",
     "org_feedback_received.total_comments": "organizations_feedback_received.total_comments",
@@ -121,7 +121,7 @@ FIELD_MAP = {
     "subscriptions_v3.total_churn_arr": "daily_arr_changes_org.sum_total_churn_arr",
     "product_facts.orgs_issue_details_viewed_has_root_cause_true": "organizations_seer.orgs_issue_details_viewed_has_root_cause_true",
     "product_facts.orgs_found_solution": "organizations_seer.orgs_found_solution",
-    "product_facts.orgs_autofix_pr_merged": "organizations_seer.orgs_autofix_pr_merged",
+    "product_facts.orgs_autofix_pr_merged": "organizations_autofix_usage.sum_autofix_merged_prs",
     "new_seer_orgs.is_new_seer_org": "organizations_seer.is_new_seer_org",
     "new_seer_orgs.seer_enabled_week": "organizations_seer.seer_enabled_week",
     "new_seer_orgs.total_invoiced_seats": "organizations_seer.total_invoiced_seats",
@@ -154,12 +154,12 @@ FIELD_MAP = {
     "metric_type_events.median_attributes": "projects_data_outcomes.median_attributes",
     "product_facts.org_ea_flag": "organizations_analytics_summary.org_ea_flag",
     "product_facts.is_last_day_of_fiscal_quarter": "product_facts_v2_base.is_last_day_of_fiscal_quarter",
-    "product_facts.dt_fiscal_quarter": "organizations_age_tracking.dt_fiscal_quarter",
-    "product_facts_promocodeclaimant.date_added_month": "organizations_promocode_usage.date_added_month",
+    "product_facts.dt_fiscal_quarter": "product_facts_v2_base.dt_fiscal_quarter",
+    "product_facts_promocodeclaimant.date_added_month": "organizations_promocode_usage__promo_code_struct.date_added_month",
     "product_facts_promocodeclaimant.date_added_date": "organizations_promocode_usage__promo_code_struct.date_added_date",
     "product_facts_promocodeclaimant.promocode": "organizations_promocode_usage__promo_code_struct.promocode",
     "product_facts_promocodeclaimant.date_added_week": "organizations_promocode_usage__promo_code_struct.date_added_week",
-    "product_facts_promocodeclaimant.promocode_id": "organizations_promocode_usage.promocode_id",
+    "product_facts_promocodeclaimant.promocode_id": "organizations_promocode_usage__promo_code_struct.promocode_id",
     "subscriptions_v3.total_new_arr": "daily_arr_changes_org.sum_total_new_arr",
     "subscriptions_v3.total_expansion_arr": "daily_arr_changes_org.sum_total_expansion_arr",
     "product_facts.replays_accepted_28d": "projects_data_outcomes.replays_accepted_28d",
@@ -169,7 +169,7 @@ FIELD_MAP = {
     "product_facts.spans_utilization_rate": "projects_data_outcomes.spans_utilization_rate",
     "product_facts.transactions_utilization_rate": "projects_data_outcomes.transactions_utilization_rate",
     "product_facts.errors_utilization_rate": "projects_data_outcomes.errors_utilization_rate",
-    "product_facts.logs_accepted_28d": "organizations_data_outcomes.logs_accepted_28d",
+    "product_facts.logs_accepted_28d": "projects_data_outcomes.logs_bytes_accepted_28d",
     "product_facts.org_active_users_28d": "organizations_active_users.org_active_users_28d",
     "product_facts.spans_accepted_28d": "organizations_data_outcomes.spans_accepted_28d",
     "billing_model.sum_total_churn_arr": "daily_arr_changes_org.sum_total_churn_arr",
@@ -177,15 +177,15 @@ FIELD_MAP = {
     "product_facts_emerge.size_builds_total": "projects_emerge.size_builds_total",
     "emerge_project.size_builds_total": "projects_emerge.size_builds_total",
     "emerge_project.size_builds_28d": "projects_emerge.size_builds_28d",
-    "data_by_project.project_platform": "projects_base_table.project_platform",
+    "data_by_project.project_platform": "sentry_project.platform",
     "product_facts.sum_org_users_total": "organizations_active_users.org_users_total",
     "product_facts_emerge.distribution_builds_28d": "organizations_emerge.distribution_builds_28d",
     "product_facts_emerge.distribution_builds_total": "organizations_emerge.distribution_builds_total",
     "product_facts_emerge.distribution_installs_total": "organizations_emerge.distribution_installs_total",
     "product_facts_emerge.distribution_installs_28d": "projects_emerge.distribution_installs_28d",
     "emerge_first_adoption_dates.first_size_analysis_date_week": "organizations_feature_adoption_dates.first_size_analytics_date",
-    "emerge_first_adoption_dates.first_size_analysis_date_date": "organizations_emerge.first_size_analysis_date_date",
-    "emerge_first_adoption_dates.first_distribution_build_date_week": "organizations_emerge.first_distribution_build_date_week",
+    "emerge_first_adoption_dates.first_size_analysis_date_date": "organizations_feature_adoption_dates.first_size_analytics_date",
+    "emerge_first_adoption_dates.first_distribution_build_date_week": "organizations_feature_adoption_dates.first_distribution_builds_week",
     "emerge_first_adoption_dates.first_distribution_build_date_date": "organizations_feature_adoption_dates.first_distribution_builds_date",
     "product_facts.crons_active_monitor_1d": "organizations_cron_monitoring.crons_active_monitor_1d",
     "product_facts_events.sdk_family": "organizations_events.sdk_family",
@@ -216,8 +216,8 @@ FIELD_MAP = {
     "product_facts.profile_duration_accepted_28d": "organizations_data_outcomes.profile_duration_accepted_28d",
     "product_facts.frontend_profile_duration_accepted_28d": "projects_data_outcomes.frontend_profile_duration_accepted_28d",
     "product_facts.first_ui_profile_date_date": "organizations_feature_adoption_dates.first_ui_profile_date_date",
-    "product_facts.front_end_profile_duration_accepted_sum": "organizations_data_outcomes.frontend_profile_duration_accepted_sum",
-    "product_facts.profile_duration_accepted_sum": "organizations_data_outcomes.profile_duration_accepted_sum",
+    "product_facts.front_end_profile_duration_accepted_sum": "projects_data_outcomes.frontend_profile_duration_accepted",
+    "product_facts.profile_duration_accepted_sum": "projects_data_outcomes.profile_duration_accepted",
     "product_facts.total_profile_duration_accepted_sum": "organizations_data_outcomes.profile_duration_accepted",
     "data_by_sdk.pduration_frontend_28d_sdk_family": "sdk_base_events.pduration_frontend_28d_proj_sdkfamily",
     "data_by_sdk.sdk_family": "sdk_map_new.language_family",
@@ -261,12 +261,12 @@ FIELD_MAP = {
     "data_by_project.all_spans_28d": "projects_data_outcomes.all_spans_28d",
     "data_by_project.proj_seer_issue_fixes_accepted_28d": "projects_data_outcomes.seer_issue_fixes_accepted_28d",
     "data_by_project.all_transactions_28d": "projects_data_outcomes.all_transactions_28d",
-    "data_by_project.replays_accepted_28d": "projects_base_table.replays_accepted_28d",
+    "data_by_project.replays_accepted_28d": "projects_data_outcomes.replays_accepted_28d",
     "data_by_project.logs_count_28d": "projects_data_outcomes.logs_items_accepted_28d",
     "product_facts.github_integration": "organizations_integrations.github_integration",
-    "per_product_trials.product_trial_start_date": "organizations_analytics_summary.product_trial_start_date",
+    "per_product_trials.product_trial_start_date": "organizations_per_product_trials.product_trial_start_date",
     "project_uptime_details.auto_detected_monitors": "projects_uptime_monitoring.auto_detected_monitors",
-    "project_uptime_details.onboarding_monitors": "projects_uptime_monitoring.onboarding_monitors",
+    "project_uptime_details.onboarding_monitors": "projects_uptime_monitoring.sum_onboarding_monitors",
     "project_uptime_details.manually_created_monitors": "projects_uptime_monitoring.manually_created_monitors",
     "data_by_sdk.mobile_replays_28d_proj_sdkfamily": "sdk_base_events.mobile_replays_28d_proj_sdkfamily",
     "data_by_sdk.total_pduration__28d_sdk_family": "sdk_base_events.total_pduration__28d_sdk_family",
@@ -288,7 +288,7 @@ FIELD_MAP = {
     "product_facts.crons_checkins_daily": "organizations_cron_monitoring.crons_checkins_daily",
     "data_by_project.project_first_event_date_date": "sentry_projects.first_event_date",
     "data_by_project.errors_accepted_28d": "projects_data_outcomes.errors_accepted_28d",
-    "data_by_project.transactions_accepted_28d": "projects_base_table.transactions_accepted_28d",
+    "data_by_project.transactions_accepted_28d": "projects_data_outcomes.transactions_accepted_28d",
     "data_by_project.proj_seer_issue_fixes_accepted": "projects_data_outcomes.seer_issue_fixes_accepted",
     "product_facts_integrations_array.individual_integration_features": "organizations_integrations.individual_integration_features",
     "data_by_project.proj_seer_issue_scans_accepted": "projects_data_outcomes.seer_issue_scans_accepted",
@@ -311,9 +311,9 @@ FIELD_MAP = {
     "data_by_sdkversion.sdk_version_transactions_support_proj": "sdk_mapping_minversion.transaction_support",
     "data_by_project.profiles_accepted_28d": "projects_data_outcomes.profiles_accepted_28d",
     "data_by_project.attachments_accepted_28d": "projects_data_outcomes.attachments_accepted_28d",
-    "data_by_project.spike_protection_disabled": "projects_base_table.spike_protection_disabled",
+    "data_by_project.spike_protection_disabled": "projects_configuration.spike_protection_disabled_flag",
     "data_by_project.regression_issue_alerts_count": "projects_alert_rules.count_of_alerts_for_regression",
-    "data_by_project.sdk_integrations_enabled": "projects_base_table.sdk_integrations_enabled",
+    "data_by_project.sdk_integrations_enabled": "projects_events.sdk_integrations_flag",
     "data_by_project.new_issue_alerts_count": "projects_alert_rules.count_of_alerts_for_new_issues",
     "data_by_project.single_event_issue_percent_28d_proj": "projects_base_table.single_event_issue_percent_28d_proj",
     "data_by_project.messaging_integration_issue_alerts_count": "projects_alert_rules.count_of_messaging_integrations",
@@ -328,8 +328,8 @@ FIELD_MAP = {
     "data_by_project.error_count_issue_alerts_count": "projects_alert_rules.count_of_alerts_for_issue_based_event_count",
     "data_by_project.transactional_data_metric_alerts_count": "projects_metric_alerts.transaction_based_alerts_count",
     "data_by_project.custom_tags_issue_alerts_count": "projects_alert_rules.count_of_alert_rules_with_custom_tags",
-    "data_by_project.team_notification_issue_alert_count": "projects_base_table.team_notification_issue_alert_count",
-    "product_facts.sso_provider": "organizations_sso_configuration.sso_provider",
+    "data_by_project.team_notification_issue_alert_count": "projects_alert_rules.count_of_alert_rules_notifying_team",
+    "product_facts.sso_provider": "organizations_sso_configuration.provider",
     "product_facts.sso_users_28d": "organizations_sso_configuration.num_users_last_28days_from_snapshot",
     "product_facts.external_ticket_integration_flag": "organizations_integrations.external_ticket_integration_flag",
     "product_facts.sso_status": "organizations_sso_configuration.sso_status",
@@ -341,7 +341,7 @@ FIELD_MAP = {
     "data_by_project.daily_resolved_issues_28d_proj": "projects_issues.daily_resolved_issues_28d_proj",
     "data_by_project.codemapping_enabled": "projects_configuration.codemapping_enabled_flag",
     "data_by_project.daily_new_issues_28d_proj": "projects_issues.daily_new_issues_28d_proj",
-    "data_by_project.releases_created_through_cli": "projects_base_table.releases_created_through_cli",
+    "data_by_project.releases_created_through_cli": "projects_releases.releases_created_through_cli",
     "data_by_project.releases_having_commits_associated": "projects_releases.releases_having_commits_associated",
     "data_by_project.ownership_rules": "projects_configuration.number_of_ownership_rules",
     "data_by_project.daily_ignored_issues_28d_proj": "projects_issues.daily_ignored_issues_28d_proj",
@@ -390,7 +390,7 @@ FIELD_MAP = {
     "issues_by_type_struct.daily_new_performance_issues_sum": "issues_org_type.daily_new_performance_issues_sum",
     "issues_by_type_struct.daily_resolved_performance_issues_sum": "issues_base_type.daily_resolved_performance_issues",
     "product_facts.sum_replays_rate_limited": "projects_data_outcomes.sum_replays_rate_limited",
-    "product_facts_features_array._individual_features": "organizations_feature_flags._individual_features",
+    "product_facts_features_array._individual_features": "organizations_integrations__all_integration_features_array._individual_features",
     "product_facts_events.web": "organizations_events.web",
     "product_facts_events.server": "organizations_events.server",
     "product_facts_events.desktop": "organizations_events.desktop",
@@ -419,7 +419,21 @@ FIELD_MAP = {
     "product_facts.transactions_client_side_sampling_rate_28d": "organizations_analytics_summary.transactions_client_side_sampling_rate_28d",
     "product_facts.seer_issue_fixes_accepted_sum": "organizations_seer.seer_issue_fixes_accepted_sum",
     "product_facts.seer_issue_scans_accepted_sum": "organizations_seer.seer_issue_scans_accepted_sum",
+    "user_details.given_name": "user_details_for_analytics.given_name",
+    "user_details.username": "user_details_for_analytics.username",
+    "user_details.full_name": "user_details_for_analytics.full_name",
+    "emerge_first_adoption_dates.first_size_analysis_date": "organizations_feature_adoption_dates.first_size_analysis_date",
+    "metric_type_events.median_size_bytes": "metric_type_events.median_size_bytes",
+},
+("forecasts_v2", "subscriptions_v3"): {},
+("product_facts", "product_usage_sdk"): {},
 }
+
+FIELD_MAP = FIELD_MAPS.get((OLD_EXPLORE, NEW_EXPLORE), {})
+
+
+def get_field_map():
+    return FIELD_MAPS.get((OLD_EXPLORE, NEW_EXPLORE), {})
 
 
 # ─────────────────────────────────────────────
@@ -434,6 +448,9 @@ def parse_args():
     p.add_argument("--validate",      action="store_true", help="Check source dashboard tiles for unmapped fields")
     p.add_argument("--check-explore", action="store_true", help="Verify all FIELD_MAP destinations and JOINED_VIEWS exist in new explore")
     p.add_argument("--ini",           default="looker.ini", help="Path to looker.ini (default: ./looker.ini)")
+    p.add_argument("--explore-from",  default="product_facts", help="Old explore name (default: product_facts)")
+    p.add_argument("--explore-to",    default="product_usage_org_proj", help="New explore name (default: product_usage_org_proj)")
+    p.add_argument("--model",         default="super_big_facts", help="New model name (default: super_big_facts)")
     return p.parse_args()
 
 
@@ -1036,9 +1053,15 @@ def rollback(sdk, dest_id):
 if __name__ == "__main__":
     args = parse_args()
     sdk = looker_sdk.init40(config_file=args.ini)
+
+    OLD_EXPLORE = args.explore_from
+    NEW_MODEL   = args.model
+    NEW_EXPLORE = args.explore_to
+    FIELD_MAP   = get_field_map()
+
     sdk.update_session(models.WriteApiSession(workspace_id="dev"))
     try:
-        sdk.update_git_branch(project_id="super_big_facts", body=models.WriteGitBranch(name="v2-migration"))
+        sdk.update_git_branch(project_id=NEW_MODEL, body=models.WriteGitBranch(name="v2-migration"))
     except Exception as e:
         print(f"⚠️  Could not switch to v2-migration branch (proceeding on current branch): {e}")
 
