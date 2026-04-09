@@ -79,10 +79,11 @@ JOINED_VIEWS_IN_NEW_EXPLORE = {
 }
 
 # ─────────────────────────────────────────────
-# FIELD MAP — fields that need remapping old → new
+# FIELD MAPS — keyed by (old_explore, new_explore)
 # Fields from joined views that haven't changed don't need to be listed here
 # ─────────────────────────────────────────────
-FIELD_MAP = {
+FIELD_MAPS = {
+("product_facts", "product_usage_org_proj"): {
     "product_facts.organizations_count":        "product_facts_v2_base.count",
     "product_facts.active_organizations_count": "organizations.active_organizations_count",
     "product_facts.dt_date":                    "product_facts_v2_base.dt_date",
@@ -422,7 +423,16 @@ FIELD_MAP = {
     "user_details.full_name": "user_details_for_analytics.full_name",
     "emerge_first_adoption_dates.first_size_analysis_date": "organizations_feature_adoption_dates.first_size_analysis_date",
     "metric_type_events.median_size_bytes": "metric_type_events.median_size_bytes",
+},
+("forecasts_v2", "subscriptions_v3"): {},
+("product_facts", "product_usage_sdk"): {},
 }
+
+FIELD_MAP = FIELD_MAPS.get((OLD_EXPLORE, NEW_EXPLORE), {})
+
+
+def get_field_map():
+    return FIELD_MAPS.get((OLD_EXPLORE, NEW_EXPLORE), {})
 
 
 # ─────────────────────────────────────────────
@@ -437,6 +447,9 @@ def parse_args():
     p.add_argument("--validate",      action="store_true", help="Check source dashboard tiles for unmapped fields")
     p.add_argument("--check-explore", action="store_true", help="Verify all FIELD_MAP destinations and JOINED_VIEWS exist in new explore")
     p.add_argument("--ini",           default="looker.ini", help="Path to looker.ini (default: ./looker.ini)")
+    p.add_argument("--explore-from",  default="product_facts", help="Old explore name (default: product_facts)")
+    p.add_argument("--explore-to",    default="product_usage_org_proj", help="New explore name (default: product_usage_org_proj)")
+    p.add_argument("--model",         default="super_big_facts", help="New model name (default: super_big_facts)")
     return p.parse_args()
 
 
@@ -996,8 +1009,14 @@ def rollback(sdk, dest_id):
 if __name__ == "__main__":
     args = parse_args()
     sdk = looker_sdk.init40(config_file=args.ini)
+
+    OLD_EXPLORE = args.explore_from
+    NEW_MODEL   = args.model
+    NEW_EXPLORE = args.explore_to
+    FIELD_MAP   = get_field_map()
+
     sdk.update_session(models.WriteApiSession(workspace_id="dev"))
-    sdk.update_git_branch(project_id="super_big_facts", body=models.WriteGitBranch(name="v2-migration"))
+    sdk.update_git_branch(project_id=NEW_MODEL, body=models.WriteGitBranch(name="v2-migration"))
 
     # Load all fields from new explore into module-level sets for is_problem_field
     try:
