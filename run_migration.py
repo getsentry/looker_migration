@@ -872,18 +872,14 @@ def swap_and_fix_tiles(sdk, dest_id, dry_run):
             print(f"  Skipping '{el.title}' — already on: {q.view}")
             continue
         vc, _ = extract_vis_config(el)
+        remapped_fields  = remap_fields(q.fields, el.title)
+        remapped_filters = remap_filters(q.filters, el.title)
+        remapped_sorts   = remap_sorts(q.sorts)
         target_explore = route_explore(
-            list(q.fields or []) + list((q.filters or {}).keys()),
+            list(remapped_fields or []) + list((remapped_filters or {}).keys()),
             _EXCLUSIVE_1, _EXCLUSIVE_2,
         )
         if dry_run:
-            # Check for fields that would break even in dry run mode
-            for f in (q.fields or []):
-                if is_problem_field(f):
-                    print(f"  ⚠️  WILL BREAK '{el.title}' — field not available in new explore: {f}")
-            for f in (q.filters or {}).keys():
-                if is_problem_field(f):
-                    print(f"  ⚠️  WILL BREAK '{el.title}' — filter not available in new explore: {f}")
             for s in (q.sorts or []):
                 if is_problem_field(s.split(" ")[0]):
                     print(f"  ⚠️  WILL BREAK '{el.title}' — sort not available in new explore: {s}")
@@ -893,9 +889,9 @@ def swap_and_fix_tiles(sdk, dest_id, dry_run):
             models.WriteQuery(
                 model=NEW_MODEL,
                 view=target_explore,
-                fields=remap_fields(q.fields, el.title),
-                filters=remap_filters(q.filters, el.title),
-                sorts=remap_sorts(q.sorts),
+                fields=remapped_fields,
+                filters=remapped_filters,
+                sorts=remapped_sorts,
                 limit=q.limit,
                 dynamic_fields=remap_dynamic_fields(q.dynamic_fields),
                 pivots=remap_fields(q.pivots),
