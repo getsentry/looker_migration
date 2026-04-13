@@ -426,7 +426,248 @@ FIELD_MAPS = {
     "metric_type_events.median_size_bytes": "metric_type_events.median_size_bytes",
 },
 ("forecasts_v2", "subscriptions_v3"): {},
-("product_facts", "product_usage_sdk"): {},
+("product_facts", "product_usage_sdk"): {
+    "accounts_billingmetricusage_on_org.outcome_readable": "accounts_billingmetricusage_on_org.outcome_readable",
+    "accounts_billingmetricusage_on_org.sum_quantity_28d": "projects_data_outcomes.sum_quantity_28d",
+    "billing_model.billing_model": "daily_arr_by_category.billing_model",
+    "billing_model_billing_category.sum_churn_arr": "daily_arr_changes_category.sum_total_churn_arr",
+    "billing_model_billing_category.sum_contraction_arr": "daily_arr_changes_category.sum_total_contraction_arr",
+    "billing_model_billing_category.sum_expansion_arr": "daily_arr_changes_category.sum_total_expansion_arr",
+    "billing_model_billing_category.sum_new_arr": "daily_arr_changes_category.sum_total_new_arr",
+    "billing_model_billing_category.sum_reactivation_arr": "daily_arr_changes_category.sum_total_reactivation_arr",
+    "daily_financial_data_billing_category_struct.change_in_ondemand_arr": "daily_arr_changes_category.ondemand_change_arr",
+    "data_by_project.attachments_accepted_28d": "projects_data_outcomes.attachments_accepted_28d",
+    "data_by_project.client_side_filters_used": "projects_data_outcomes.client_side_filters_used",
+    "data_by_project.client_side_sampling_used": "projects_data_outcomes.client_side_sampling_used",
+    "data_by_project.codemapping_enabled": "projects_configuration.codemapping_enabled_flag",
+    "data_by_project.create_jira_ticket_issue_alert_count": "projects_alert_rules.count_of_alert_rules_to_create_ticket",
+    "data_by_project.custom_tags_issue_alerts_count": "projects_alert_rules.count_of_alert_rules_with_custom_tags",
+    "data_by_project.daily_ignored_issues_28d_proj": "projects_issues.daily_ignored_issues_28d_proj",
+    "data_by_project.daily_new_issues_28d_proj": "projects_issues.daily_new_issues_28d_proj",
+    "data_by_project.daily_resolved_issues_28d_proj": "projects_issues.daily_resolved_issues_28d_proj",
+    "data_by_project.environment_based_metric_alerts_count": "projects_metric_alerts.environment_based_alert_rules_count",
+    "data_by_project.error_count_issue_alerts_count": "projects_alert_rules.count_of_alerts_for_issue_based_event_count",
+    "data_by_project.error_spike_metric_alerts_count": "projects_metric_alerts.error_spike_metric_alerts_count",
+    "data_by_project.errors_accepted_28d": "projects_data_outcomes.errors_accepted_28d",
+    "data_by_project.errors_over_quota_quarter_count": "projects_configuration.errors_over_quota_quarter_count",
+    "data_by_project.events_accepted_28d": "projects_data_outcomes.events_accepted_28d",
+    "data_by_project.has_environments_current_enabled": "projects_configuration.has_environments_current_flag",
+    "data_by_project.indexed_transactions_accepted_28d": "projects_data_outcomes.indexed_transactions_accepted_28d",
+    "data_by_project.messaging_integration_issue_alerts_count": "projects_alert_rules.count_of_messaging_integrations",
+    "data_by_project.new_issue_alerts_count": "projects_alert_rules.count_of_alerts_for_new_issues",
+    "data_by_project.ownership_rules": "projects_configuration.number_of_ownership_rules",
+    "data_by_project.primary_sdk": "projects_base_table.primary_sdk",
+    "data_by_project.profiles_accepted_28d": "projects_data_outcomes.profiles_accepted_28d",
+    "data_by_project.proj_codeowner_rule_count": "projects_base_table.proj_codeowner_rule_count",
+    "data_by_project.proj_errors_accepted": "projects_data_outcomes.errors_accepted",
+    "data_by_project.proj_replays_accepted": "projects_data_outcomes.replays_accepted",
+    "data_by_project.proj_spans_accepted": "projects_data_outcomes.daily_spans_accepted",
+    "data_by_project.proj_team_member_count": "projects_team_assignments.team_members_count",
+    "data_by_project.proj_trace_metric_items_accepted": "projects_data_outcomes.trace_metric_items_accepted",
+    "data_by_project.project_count": "projects_data_outcomes.project_count",
+    "data_by_project.project_first_event_date_date": "sentry_projects.first_event_date",
+    "data_by_project.project_id": "product_facts_v2_base.project_id",
+    "data_by_project.project_name": "sentry_projects.name",
+    "data_by_project.project_platform": "sentry_project.platform",
+    "data_by_project.regression_issue_alerts_count": "projects_alert_rules.count_of_alerts_for_regression",
+    "data_by_project.releases_created_through_cli": "projects_releases.releases_created_through_cli",
+    "data_by_project.releases_having_commits_associated": "projects_releases.releases_having_commits_associated",
+    "data_by_project.replays_accepted_28d": "projects_data_outcomes.replays_accepted_28d",
+    "data_by_project.replays_over_quota_quarter_count": "projects_configuration.replays_over_quota_quarter_count",
+    "data_by_project.sdk_integrations_enabled": "projects_events.sdk_integrations_flag",
+    "data_by_project.server_side_filters_used": "projects_configuration.server_side_filters_used",
+    "data_by_project.single_event_issue_percent_28d_proj": "projects_base_table.single_event_issue_percent_28d_proj",
+    "data_by_project.spend_allocation_enabled_flag": "projects_configuration.spend_allocation_enabled_flag",
+    "data_by_project.spike_protection_disabled": "projects_configuration.spike_protection_disabled_flag",
+    "data_by_project.team_notification_issue_alert_count": "projects_alert_rules.count_of_alert_rules_notifying_team",
+    "data_by_project.transactional_data_metric_alerts_count": "projects_metric_alerts.transaction_based_alerts_count",
+    "data_by_project.transactions_accepted_28d": "projects_data_outcomes.transactions_accepted_28d",
+    "data_by_project.transactions_over_quota_quarter_count": "projects_configuration.transactions_over_quota_quarter_count",
+    "data_by_sdk.Total_replays_28d": "sdk_base_events.replays_28d_proj_sdk",
+    "data_by_sdk.crash_free_rate": "sdk_base_events.crash_free_rate_percent",
+    "data_by_sdk.crash_free_rate_percent": "sdk_base_events.crash_free_rate_percent",
+    "data_by_sdk.crash_free_sessions_28d": "sdk_base_events.crash_free_sessions_28d",
+    "data_by_sdk.events_28d_proj_sdkfamily": "sdk_base_events.events_28d_proj_sdkfamily",
+    "data_by_sdk.log_size_bytes_28d": "sdk_base_events.log_size_bytes_28d_proj_sdk",
+    "data_by_sdk.log_size_bytes_28d_proj_sdkfamily": "sdk_base_events.log_size_bytes_28d_proj_sdkfamily",
+    "data_by_sdk.mobile_replays_28d_proj_sdkfamily": "sdk_base_events.mobile_replays_28d_proj_sdkfamily",
+    "data_by_sdk.number_of_errors_28d": "sdk_base_events.errors_28d_proj_sdk",
+    "data_by_sdk.number_of_events": "sdk_base_events.events",
+    "data_by_sdk.number_of_events_28d": "sdk_base_events.events_28d_proj_sdk",
+    "data_by_sdk.number_of_mobile_replays_28d": "sdk_base_events.mobile_replays_28d_proj_sdk",
+    "data_by_sdk.number_of_transactions_28d": "sdk_base_events.transactions_28d_proj_sdk",
+    "data_by_sdk.pduration_backend_28d_sdk_family": "sdk_base_events.pduration_backend_28d_proj_sdkfamily",
+    "data_by_sdk.pduration_frontend_28d_sdk_family": "sdk_base_events.pduration_frontend_28d_proj_sdkfamily",
+    "data_by_sdk.replays_28d_proj_sdkfamily": "sdk_base_events.replays_28d_proj_sdkfamily",
+    "data_by_sdk.sdk_family": "sdk_map_new.language_family",
+    "data_by_sdk.sdk_integrations_string": "sdk_base_events.sdk_integrations_string",
+    "data_by_sdk.sdk_name": "sdk_base_events.sdk_name",
+    "data_by_sdk.sessions_abnormal_sum": "sdk_base_events.sessions_abnormal",
+    "data_by_sdk.sessions_crash_free_sum": "sdk_base_events.sessions_crash_free_sum",
+    "data_by_sdk.sessions_crashed_28d": "sdk_base_events.sessions_crashed_28d_proj_sdk",
+    "data_by_sdk.sessions_crashed_sum": "sdk_base_events.sessions_crashed",
+    "data_by_sdk.spans_28d_proj_sdkfamily": "sdk_base_events.spans_28d_proj_sdkfamily",
+    "data_by_sdk.total_accepted_replay_count": "sdk_base_events.replays_28d_proj_sdk",
+    "data_by_sdk.total_pduration__28d_sdk_family": "sdk_base_events.total_pduration__28d_sdk_family",
+    "data_by_sdk.total_sessions_28d": "sdk_base_events.total_sessions_28d_proj_sdk",
+    "data_by_sdk.total_sessions_sum": "sdk_base_events.total_sessions",
+    "data_by_sdk.trace_metric_items_28d": "sdk_base_events.trace_metric_items_28d_proj_sdk",
+    "data_by_sdk.trace_metric_size_bytes_28d": "sdk_base_events.trace_metric_size_bytes_28d_proj_sdk",
+    "data_by_sdk.transactions_28d_proj_sdkfamily": "sdk_base_events.transactions_28d_proj_sdkfamily",
+    "data_by_sdkversion.errors": "sdk_base_events.errors",
+    "data_by_sdkversion.log_size_bytes": "sdk_base_events.log_size_bytes",
+    "data_by_sdkversion.logs_origin": "sdk_base_events.logs_origin",
+    "data_by_sdkversion.median_log_size_bytes": "sdk_base_events.median_log_size_bytes",
+    "data_by_sdkversion.median_metric_size_bytes": "sdk_base_events.median_trace_metric_size_bytes",
+    "data_by_sdkversion.number_of_events": "sdk_base_events.events",
+    "data_by_sdkversion.profile_duration_backend": "sdk_base_events.profile_duration_backend",
+    "data_by_sdkversion.profile_duration_frontend": "sdk_base_events.profile_duration_frontend",
+    "data_by_sdkversion.profiles": "sdk_base_events.profiles",
+    "data_by_sdkversion.sdk_version": "sdk_base_events.sdk_version",
+    "data_by_sdkversion.sdk_version_crons_support_proj": "sdk_mapping_minversion.crons_support",
+    "data_by_sdkversion.sdk_version_profiles_support_proj": "sdk_mapping_minversion.profile_support",
+    "data_by_sdkversion.sdk_version_replays_support_proj": "sdk_mapping_minversion.replay_support",
+    "data_by_sdkversion.sdk_version_transactions_support_proj": "sdk_mapping_minversion.transaction_support",
+    "data_by_sdkversion.total_profile_duration_continuous": "sdk_base_events.profile_duration_backend",
+    "data_by_sdkversion.trace_metric_items": "sdk_base_events.trace_metric_items",
+    "data_by_sdkversion.trace_metric_size_bytes": "sdk_base_events.trace_metric_size_bytes",
+    "data_by_sdkversion.transactions": "sdk_base_events.transactions",
+    "data_by_sdkversion.uses_latest_sdk_version": "sdk_base_events.uses_latest_sdk_version",
+    "issues_by_type_struct.daily_new_performance_issues_sum": "issues_org_type.daily_new_performance_issues_sum",
+    "issues_by_type_struct.daily_resolved_performance_issues_sum": "issues_base_type.daily_resolved_performance_issues",
+    "metric_type_events.median_attributes": "projects_data_outcomes.median_attributes",
+    "metric_type_events.metric_items": "projects_data_outcomes.metric_items",
+    "organization_uptime_summary.org_dt_total_active_monitors": "organizations.org_dt_total_active_monitors",
+    "product_facts.active_organizations_count": "organizations.active_organizations_count",
+    "product_facts.alert_rules": "organizations_feature_flags.alert_rules",
+    "product_facts.avg_org_active_users_28d": "organizations_age_tracking.avg_org_active_users_28d",
+    "product_facts.combined_integration_features": "organizations_integrations.all_integration_features_string",
+    "product_facts.created_dashboard_count": "organizations_analytics_specific.created_dashboard_count",
+    "product_facts.crons_active_monitor_1d": "organizations_cron_monitoring.crons_active_monitor_1d",
+    "product_facts.custom_tags": "organizations_feature_flags.custom_tags",
+    "product_facts.daily_new_performance_issues_28d_org": "projects_issues.daily_new_performance_issues_28d_proj",
+    "product_facts.discover_activity_count": "organizations_analytics_specific.discover_activity_28d_org",
+    "product_facts.dt_date": "product_facts_v2_base.dt_date",
+    "product_facts.dt_fiscal_quarter": "product_facts_v2_base.dt_fiscal_quarter",
+    "product_facts.dt_month": "product_facts_v2_base.dt_month",
+    "product_facts.dt_week": "product_facts_v2_base.dt_week",
+    "product_facts.errors_accepted_28d": "projects_data_outcomes.errors_accepted_28d",
+    "product_facts.errors_utilization_rate": "projects_data_outcomes.errors_utilization_rate",
+    "product_facts.external_ticket_integration_flag": "organizations_integrations.external_ticket_integration_flag",
+    "product_facts.first_continuous_profile_date_date": "organizations_feature_adoption_dates.first_continuous_profile_date",
+    "product_facts.first_logs_date_date": "organizations_feature_adoption_dates.first_logs_date_date",
+    "product_facts.first_logs_date_month": "organizations_feature_adoption_dates.first_logs_date_month",
+    "product_facts.first_spans_date_date": "organizations_feature_adoption_dates.first_spans_date_date",
+    "product_facts.first_spans_date_week": "organizations_feature_adoption_dates.first_spans_week",
+    "product_facts.first_ui_profile_date_date": "organizations_feature_adoption_dates.first_ui_profile_date_date",
+    "product_facts.front_end_profile_duration_accepted_sum": "projects_data_outcomes.frontend_profile_duration_accepted",
+    "product_facts.frontend_profile_duration_accepted_28d": "projects_data_outcomes.frontend_profile_duration_accepted_28d",
+    "product_facts.github_integration": "organizations_integrations.github_integration",
+    "product_facts.github_stacktrace_linked_successes": "organizations_analytics_specific.github_stacktrace_linked",
+    "product_facts.indexed_spans_accepted_28d": "projects_data_outcomes.indexed_spans_accepted_28d",
+    "product_facts.indexed_transactions_accepted_28d": "projects_data_outcomes.indexed_transactions_accepted_28d",
+    "product_facts.is_last_day_of_month": "product_facts_v2_base.is_last_day_of_month",
+    "product_facts.is_last_day_of_week": "product_facts_v2_base.is_last_day_of_week",
+    "product_facts.logs_accepted_28d": "projects_data_outcomes.logs_bytes_accepted_28d",
+    "product_facts.logs_count_28d": "projects_data_outcomes.logs_items_accepted_28d",
+    "product_facts.opened_discover_query_count": "projects_analytics_specific.opened_discover_query",
+    "product_facts.org_active": "organizations.is_active",
+    "product_facts.org_active_backend": "organizations_feature_flags.org_active_backend",
+    "product_facts.org_active_frontend": "sdk_map_new.framework_frontend",
+    "product_facts.org_active_mobile": "organizations_feature_flags.org_active_mobile",
+    "product_facts.org_active_traces": "organizations_events.org_active_traces",
+    "product_facts.org_active_users_28d": "organizations_active_users.org_active_users_28d",
+    "product_facts.org_age": "organizations_age_tracking.org_age",
+    "product_facts.org_ea_flag": "organizations_analytics_summary.org_ea_flag",
+    "product_facts.org_id_link_to_engagement_score": "organizations_feature_flags.org_id_link_to_engagement_score",
+    "product_facts.org_id_link_to_project_health": "organizations_feature_flags.org_id_link_to_project_health",
+    "product_facts.organization_id": "product_facts_v2_base.organization_id",
+    "product_facts.organization_name": "organizations_analytics_summary.organization_name",
+    "product_facts.organization_slug": "organizations.slug",
+    "product_facts.organizations_count": "product_facts_v2_base.count",
+    "product_facts.performance_landing_page_visit_count": "organizations_analytics_specific.performance_landing_page_visits",
+    "product_facts.performance_units_accepted": "projects_data_outcomes.performance_units_accepted",
+    "product_facts.performance_units_accepted_28d": "projects_data_outcomes.performance_units_accepted_28d",
+    "product_facts.profile_duration_accepted_28d": "organizations_data_outcomes.profile_duration_accepted_28d",
+    "product_facts.profile_duration_accepted_sum": "projects_data_outcomes.profile_duration_accepted",
+    "product_facts.profiles_accepted_28d": "projects_data_outcomes.profiles_accepted_28d",
+    "product_facts.release_tracking": "organizations_feature_flags.release_tracking",
+    "product_facts.replays_accepted_28d": "projects_data_outcomes.replays_accepted_28d",
+    "product_facts.seer_issue_fixes_accepted_sum": "organizations_seer.seer_issue_fixes_accepted_sum",
+    "product_facts.seer_issue_scans_accepted_sum": "organizations_seer.seer_issue_scans_accepted_sum",
+    "product_facts.source_maps": "organizations_feature_flags.source_maps",
+    "product_facts.spans_accepted_28d": "organizations_data_outcomes.spans_accepted_28d",
+    "product_facts.spans_utilization_rate_avg": "projects_data_outcomes.spans_utilization_rate_avg",
+    "product_facts.sso_provider": "organizations_sso_configuration.provider",
+    "product_facts.sso_status": "organizations_sso_configuration.sso_status",
+    "product_facts.sso_users_28d": "organizations_sso_configuration.num_users_last_28days_from_snapshot",
+    "product_facts.sum_active_projects": "organizations_data_outcomes.org_active_projects",
+    "product_facts.sum_attachments_accepted": "organizations_data_outcomes.attachments_accepted",
+    "product_facts.sum_errors_accepted": "projects_data_outcomes.errors_accepted",
+    "product_facts.sum_errors_filtered": "projects_data_outcomes.errors_filtered",
+    "product_facts.sum_errors_invalid_abuse": "projects_data_outcomes.errors_invalid_abuse",
+    "product_facts.sum_errors_rate_limited": "organizations_data_outcomes.errors_rate_limited",
+    "product_facts.sum_indexed_transactions_filtered": "projects_data_outcomes.indexed_transactions_filtered",
+    "product_facts.sum_indexed_transactions_rate_limited": "organizations_data_outcomes.indexed_transactions_rate_limited",
+    "product_facts.sum_logs_accepted": "projects_data_outcomes.logs_bytes_accepted",
+    "product_facts.sum_org_active_users_28d": "organizations.active_users_28d",
+    "product_facts.sum_org_users_total": "organizations_active_users.org_users_total",
+    "product_facts.sum_profiles_accepted": "organizations_data_outcomes.profiles_accepted",
+    "product_facts.sum_replays_accepted": "projects_data_outcomes.replays_accepted",
+    "product_facts.sum_replays_rate_limited": "projects_data_outcomes.sum_replays_rate_limited",
+    "product_facts.sum_spans_accepted": "projects_data_outcomes.daily_spans_accepted",
+    "product_facts.sum_transactions_accepted": "projects_data_outcomes.transactions_accepted",
+    "product_facts.sum_transactions_filtered": "organizations_data_outcomes.transactions_filtered",
+    "product_facts.sum_transactions_invalid_abuse": "projects_data_outcomes.transactions_invalid_abuse",
+    "product_facts.sum_transactions_rate_limited": "projects_data_outcomes.transactions_rate_limited",
+    "product_facts.total_issue_alerts_generated": "projects_analytics_specific.generated_issue_alerts",
+    "product_facts.total_metric_alerts_generated": "projects_analytics_specific.generated_metric_alerts",
+    "product_facts.total_profile_duration_accepted_28d": "projects_data_outcomes.profile_duration_accepted_28d",
+    "product_facts.total_profile_duration_accepted_sum": "organizations_data_outcomes.profile_duration_accepted",
+    "product_facts.trace_metric_items_accepted_28d": "organizations_data_outcomes.trace_metric_items_accepted_28d",
+    "product_facts.transaction_summary_visit_count": "projects_analytics_specific.performance_transaction_summary_visits",
+    "product_facts.transactions_accepted_28d": "projects_data_outcomes.transactions_accepted_28d",
+    "product_facts.transactions_client_side_sampling_rate_28d": "organizations_analytics_summary.transactions_client_side_sampling_rate_28d",
+    "product_facts.transactions_utilization_rate": "projects_data_outcomes.transactions_utilization_rate",
+    "product_facts.transactions_utilization_rate_avg": "projects_data_outcomes.transactions_utilization_rate_avg",
+    "product_facts.viewed_dashboard_count": "organizations_analytics_specific.viewed_dashboard_count",
+    "product_facts_alerts_array.primary_alertrule_id": "projects_metric_alerts.primary_alertrule_id",
+    "product_facts_alerts_array.primary_alertrule_id_active": "projects_metric_alerts.primary_alertrule_id_active",
+    "product_facts_alerts_array.primary_alertrule_id_email": "projects_metric_alerts.has_email_action",
+    "product_facts_alerts_array.primary_alertrule_id_msteams": "projects_metric_alerts.primary_alertrule_id_msteams",
+    "product_facts_alerts_array.primary_alertrule_id_pagerduty": "projects_metric_alerts.primary_alertrule_id_pagerduty",
+    "product_facts_alerts_array.primary_alertrule_id_sentryapp": "projects_metric_alerts.has_sentryapp_action",
+    "product_facts_alerts_array.primary_alertrule_id_slack": "projects_metric_alerts.primary_alertrule_id_slack",
+    "product_facts_analytics_array.percent_of_users_visiting_discover_query": "projects_analytics_summary.percent_of_users_visiting_discover_query",
+    "product_facts_events.desktop": "organizations_events.desktop",
+    "product_facts_events.event_type": "organizations_events.event_type",
+    "product_facts_events.events_28d": "organizations_data_outcomes.events_accepted_28d",
+    "product_facts_events.mobile": "organizations_events.mobile",
+    "product_facts_events.number_of_events_sum": "organizations_events.number_of_events_sum",
+    "product_facts_events.sdk_family": "organizations_events.sdk_family",
+    "product_facts_events.sdk_name": "organizations_events.sdk_name",
+    "product_facts_events.server": "organizations_events.server",
+    "product_facts_events.web": "organizations_events.web",
+    "product_facts_features_array._individual_features": "organizations_integrations__all_integration_features_array._individual_features",
+    "product_facts_org_rca_feedback.changes_negative_feedback": "product_facts_org_rca_feedback.changes_negative_feedback",
+    "product_facts_org_rca_feedback.rca_negative_feedback": "product_facts_org_rca_feedback.rca_negative_feedback",
+    "product_facts_org_rca_feedback.rca_positive_feedback": "product_facts_org_rca_feedback.rca_positive_feedback",
+    "product_facts_org_rca_feedback.solution_positive_feedback": "product_facts_org_rca_feedback.rca_positive_feedback",
+    "sdk_base_events.replays_28d_proj_sdk": "sdk_base_events.replays_28d_proj_sdk",
+    "sdk_integrations_array.individual_sdk_integrations": "sdk_org_events.individual_sdk_integrations",
+    "sdk_mapping_minversion_project.crons_support": "sdk_org_events.crons_support",
+    "sdk_mapping_minversion_project.profile_support": "sdk_org_events.profile_support",
+    "sdk_mapping_minversion_project.replay_support": "sdk_org_events.replay_support",
+    "sdk_mapping_minversion_project.transaction_support": "sdk_org_events.transaction_support",
+    "subscriptions_v3.total_new_arr": "daily_arr_changes_org.sum_total_new_arr",
+    "trial_view.trial_start_month": "organizations_trial_view.trial_start_month",
+    "user_details.full_name": "user_details.full_name",
+    "user_details.username": "user_details_for_analytics.username",
+    "user_details_for_analytics.email": "user_details_for_analytics.email",
+    "user_details_for_analytics.full_name": "user_details_for_analytics.full_name",
+    "user_details_for_analytics.is_staff": "user_details_for_analytics.is_staff",
+    "user_details_for_analytics.is_superuser": "user_details_for_analytics.is_superuser",
+},
 }
 
 FIELD_MAP = FIELD_MAPS.get((OLD_EXPLORE, NEW_EXPLORE), {})
@@ -445,9 +686,12 @@ def parse_args():
     p.add_argument("--batch",         nargs="+", metavar="ID", help="Validate multiple source dashboard IDs (or SOURCE:DEST pairs)")
     p.add_argument("--dest",          required=False, default=None, help="Destination dashboard ID (copy TO)")
     p.add_argument("--dry-run",       action="store_true", help="Preview changes without writing")
-    p.add_argument("--validate",      action="store_true", help="Check source dashboard tiles for unmapped fields")
-    p.add_argument("--check-explore", action="store_true", help="Verify all FIELD_MAP destinations and JOINED_VIEWS exist in new explore")
+    p.add_argument("--check",         action="store_true", help="Check source dashboard fields against the destination explore (API-based, grouped by tile)")
+    p.add_argument("--validate",      action="store_true", help="[deprecated] Alias for --check")
+    p.add_argument("--check-explore", action="store_true", help="[deprecated] Alias for --check")
+    p.add_argument("--audit",         action="store_true", help="[deprecated] Alias for --check")
     p.add_argument("--ini",           default="looker.ini", help="Path to looker.ini (default: ./looker.ini)")
+    p.add_argument("--production",    action="store_true", help="Run against production (skip dev session and git branch switch)")
     p.add_argument("--explore-from",  default="product_facts", help="Old explore name (default: product_facts)")
     p.add_argument("--explore-to",    default="product_usage_org_proj", help="New explore name (default: product_usage_org_proj)")
     p.add_argument("--model",         default="super_big_facts", help="New model name (default: super_big_facts)")
@@ -457,7 +701,7 @@ def parse_args():
 # ─────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────
-def extract_vis_config(element):
+def extract_vis_config(element, query=None):
     vc = getattr(element, "vis_config", None)
     if vc and isinstance(vc, dict) and vc.get("type"):
         return vc, "element.vis_config"
@@ -466,6 +710,10 @@ def extract_vis_config(element):
         vc = getattr(rm, "vis_config", None)
         if vc and isinstance(vc, dict) and vc.get("type"):
             return vc, "result_maker.vis_config"
+    if query:
+        vc = getattr(query, "vis_config", None)
+        if vc and isinstance(vc, dict) and vc.get("type"):
+            return vc, "query.vis_config"
     return None, "not found"
 
 def remap_fields(fields, tile_title=None):
@@ -578,125 +826,144 @@ def is_problem_field(field):
 
 
 def check_explore(sdk, source_id):
-    """Verify all FIELD_MAP destinations and JOINED_VIEWS exist in the new explore."""
-    print(f"\n=== Checking fields exist in {NEW_MODEL}/{NEW_EXPLORE} ===")
-    # Only check fields actually used in this dashboard
-    elements = sdk.dashboard_dashboard_elements(source_id)
-    used_old_fields = set()
-    for el in elements:
-        if not el.query_id:
-            continue
-        q = sdk.query(str(el.query_id))
-        for f in (q.fields or []):
-            used_old_fields.add(f)
-        for f in (q.filters or {}).keys():
-            used_old_fields.add(f)
-        if q.dynamic_fields:
-            try:
-                for d in json.loads(q.dynamic_fields):
-                    if d.get("based_on"):
-                        used_old_fields.add(d["based_on"])
-            except Exception:
-                pass
-
-    explore = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
-    all_fields = set()
-    for f in (explore.fields.dimensions or []):
-        all_fields.add(f.name)
-    for f in (explore.fields.measures or []):
-        all_fields.add(f.name)
-    all_views = {f.split(".")[0] for f in all_fields}
-    # map of (old_field, new_field) -> list of tile names
-    missing_fields = {}
-    for el in elements:
-        if not el.query_id:
-            continue
-        q = sdk.query(str(el.query_id))
-        el_fields = set(q.fields or []) | set((q.filters or {}).keys())
-        if q.dynamic_fields:
-            try:
-                for d in json.loads(q.dynamic_fields):
-                    if d.get("based_on"):
-                        el_fields.add(d["based_on"])
-            except Exception:
-                pass
-        for old_field, new_field in FIELD_MAP.items():
-            if old_field in el_fields and new_field not in all_fields:
-                key = (old_field, new_field)
-                tile_name = el.title or "(untitled tile)"
-                missing_fields.setdefault(key, set()).add(tile_name)
-    issues = []
-    for (old_field, new_field), tiles in missing_fields.items():
-        tile_list = ", ".join(f"'{t}'" for t in sorted(tiles))
-        issues.append(f"  {old_field} -> ❌ {new_field} (used in: {tile_list})")
-    for view in JOINED_VIEWS_IN_NEW_EXPLORE:
-        if view not in all_views:
-            issues.append(f"  JOINED_VIEWS_IN_NEW_EXPLORE view not found in explore: ❌ {view}")
-    if issues:
-        print("\u26a0\ufe0f  Issues found — check if these tiles matter to your migration:")
-        for i in issues:
-            print(i)
-        return False
-    print(f"  \u2705 All relevant mapped fields confirmed in new explore")
-    return True
+    """Deprecated — use check()."""
+    print("(--check-explore is deprecated; running --check instead)")
+    return check(sdk, source_id)
 
 def validate(sdk, source_id):
-    print(f"\n=== Validating source dashboard {source_id} ===")
+    """Deprecated — use check()."""
+    print("(--validate is deprecated; running --check instead)")
+    return check(sdk, source_id)
+
+
+# ─────────────────────────────────────────────
+# CHECK
+# ─────────────────────────────────────────────
+def check(sdk, source_id):
+    print(f"\n=== Checking source dashboard {source_id} against {NEW_MODEL}/{NEW_EXPLORE} ===\n")
+
+    try:
+        exp = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields,joins")
+    except Exception as e:
+        print(f"❌ Could not load explore {NEW_MODEL}/{NEW_EXPLORE}: {e}")
+        sys.exit(1)
+
+    dest_fields = set()
+    for f in (exp.fields.dimensions or []):
+        dest_fields.add(f.name)
+    for f in (exp.fields.measures or []):
+        dest_fields.add(f.name)
+
+    # Views that are actually joined into the explore
+    dest_views = {f.split(".")[0] for f in dest_fields}
+    if exp.joins:
+        for j in exp.joins:
+            if j.name:
+                dest_views.add(j.name)
+
     elements = sdk.dashboard_dashboard_elements(source_id)
-    issues = []
+
+    # Deduped summary buckets
+    summary_bad          = {}   # old_field -> dest_field
+    summary_missing_join = set()
+    summary_missing_field = set()
+    summary_needs_mapping = set()
 
     for el in elements:
         if not el.query_id:
             continue
         q = sdk.query(str(el.query_id))
-        if q.view != OLD_EXPLORE:
-            continue
+        tile_title = el.title or "(untitled)"
 
+        fields = set()
         for f in (q.fields or []):
-            if is_problem_field(f):
-                issues.append(f"  Tile '{el.title}' — unmapped field: {f}")
-
+            if "." in f and not f.startswith("__"):
+                fields.add(f)
         for f in (q.filters or {}).keys():
-            if is_problem_field(f):
-                issues.append(f"  Tile '{el.title}' — unmapped filter: {f}")
-
+            if "." in f and not f.startswith("__"):
+                fields.add(f)
         for s in (q.sorts or []):
-            field = s.split(" ")[0]
-            if is_problem_field(field):
-                issues.append(f"  Tile '{el.title}' — unmapped sort: {s}")
-
+            f = s.split(" ")[0]
+            if "." in f and not f.startswith("__"):
+                fields.add(f)
         if q.dynamic_fields:
             try:
                 for d in json.loads(q.dynamic_fields):
-                    label = d.get("label") or d.get("table_calculation") or "(unnamed)"
-                    based_on = d.get("based_on", "")
-                    if based_on and is_problem_field(based_on):
-                        issues.append(f"  Tile '{el.title}' — dynamic field '{label}' based_on not available: {based_on}")
-                    for ref in re.findall(r'\$\{([^}]+)\}', d.get("expression") or ""):
-                        if is_problem_field(ref):
-                            issues.append(f"  Tile '{el.title}' — dynamic field '{label}' expression references: {ref}")
-                    for fk in (d.get("filters") or {}).keys():
-                        if is_problem_field(fk):
-                            issues.append(f"  Tile '{el.title}' — dynamic field '{label}' filter not available: {fk}")
-            except Exception as e:
-                issues.append(f"  Tile '{el.title}' — could not parse dynamic_fields: {e}")
+                    f = d.get("based_on", "")
+                    if f and "." in f and not f.startswith("__"):
+                        fields.add(f)
+            except Exception:
+                pass
 
-    # Deduplicate
-    seen, deduped = set(), []
-    for i in issues:
-        if i not in seen:
-            seen.add(i)
-            deduped.append(i)
+        if not fields:
+            continue
 
-    if deduped:
-        print("⚠️  Issues found — resolve before migrating:")
-        for i in deduped:
-            print(i)
-        print("\nTo fix: either add the field to FIELD_MAP, or add its view to JOINED_VIEWS_IN_NEW_EXPLORE if it exists in the new explore.")
-        return False
+        ok, mapped, bad = [], [], []
+        missing_join, missing_field, needs_mapping = [], [], []
+
+        for f in sorted(fields):
+            if f in dest_fields:
+                ok.append(f)
+            elif f in FIELD_MAP:
+                dest = FIELD_MAP[f]
+                if dest in dest_fields:
+                    mapped.append((f, dest))
+                else:
+                    bad.append((f, dest))
+                    summary_bad[f] = dest
+            else:
+                view = f.split(".")[0]
+                if view not in dest_views:
+                    missing_join.append(f)
+                    summary_missing_join.add(f)
+                else:
+                    missing_field.append(f)
+                    summary_missing_field.add(f)
+
+        print(f"  Tile: '{tile_title}'")
+        for f in ok:
+            print(f"    ✅ {f}")
+        for f, dest in mapped:
+            print(f"    ✅ {f} → {dest}")
+        for f, dest in bad:
+            print(f"    ❌ {f} → {dest}  (FIELD_MAP destination not in explore)")
+        for f in missing_join:
+            print(f"    🔴 {f}  (view not joined into explore)")
+        for f in missing_field:
+            print(f"    🟡 {f}  (view is joined but field doesn't exist in LookML)")
+        for f in needs_mapping:
+            print(f"    ⚠️  {f}  (exists in explore but not in FIELD_MAP)")
+        print()
+
+    any_issues = summary_bad or summary_missing_join or summary_missing_field or summary_needs_mapping
+    print("=== Summary ===")
+    if not any_issues:
+        print("✅ All fields accounted for.")
     else:
-        print("✅ All fields are mapped — safe to migrate")
-        return True
+        if summary_bad:
+            print("❌ Bad mappings (FIELD_MAP destination missing from explore):")
+            for old, dest in sorted(summary_bad.items()):
+                print(f"   {old} → {dest}")
+        if summary_missing_join:
+            print("🔴 Missing joins (view not joined into explore — fix in LookML explore definition):")
+            for f in sorted(summary_missing_join):
+                print(f"   {f}")
+        if summary_missing_field:
+            print("🟡 Missing fields (view is joined but dimension/measure needs to be written in LookML):")
+            for f in sorted(summary_missing_field):
+                print(f"   {f}")
+        if summary_needs_mapping:
+            print("⚠️  Needs mapping (field exists in explore but is missing from FIELD_MAP):")
+            for f in sorted(summary_needs_mapping):
+                print(f"   {f}")
+
+    return not any_issues
+
+
+def audit(sdk, source_id):
+    """Deprecated — use check()."""
+    print("(--audit is deprecated; running --check instead)")
+    return check(sdk, source_id)
 
 
 # ─────────────────────────────────────────────
@@ -710,7 +977,7 @@ def snapshot(sdk, dest_id, dry_run):
         if not el.query_id:
             continue
         q = sdk.query(str(el.query_id))
-        vc, loc = extract_vis_config(el)
+        vc, loc = extract_vis_config(el, q)
         if not vc:
             print(f"  ⚠️  '{el.title}' — vis_config not found")
         else:
@@ -871,7 +1138,7 @@ def swap_and_fix_tiles(sdk, dest_id, dry_run):
         if q.view != OLD_EXPLORE:
             print(f"  Skipping '{el.title}' — already on: {q.view}")
             continue
-        vc, _ = extract_vis_config(el)
+        vc, _ = extract_vis_config(el, q)
         remapped_fields  = remap_fields(q.fields, el.title)
         remapped_filters = remap_filters(q.filters, el.title)
         remapped_sorts   = remap_sorts(q.sorts)
@@ -1012,7 +1279,7 @@ def verify(sdk, dest_id):
                 field = sort.split(" ")[0]
                 if is_problem_field(field):
                     issues.append(f"Tile '{el.title}' sort: {sort}")
-        vc, loc = extract_vis_config(el)
+        vc, loc = extract_vis_config(el, q)
         if not vc:
             issues.append(f"Tile '{el.title}' missing vis_config — may show as Table (Legacy)")
         else:
@@ -1055,7 +1322,13 @@ if __name__ == "__main__":
     NEW_EXPLORE = args.explore_to
     FIELD_MAP   = get_field_map()
 
-    sdk.update_session(models.WriteApiSession(workspace_id="dev"))
+    # --check runs against production — do it before switching to dev
+    if args.check or args.audit or args.validate or args.check_explore:
+        ok = check(sdk, args.source)
+        sys.exit(0 if ok else 1)
+
+    if not args.production:
+        sdk.update_session(models.WriteApiSession(workspace_id="dev"))
     try:
         sdk.update_git_branch(project_id=NEW_MODEL, body=models.WriteGitBranch(name="v2-migration"))
     except Exception as e:
@@ -1082,11 +1355,15 @@ if __name__ == "__main__":
         # Load explore fields once (both explores)
         all_explore_fields = set()
         for _explore_name in (NEW_EXPLORE, NEW_EXPLORE_2):
-            _exp = sdk.lookml_model_explore(NEW_MODEL, _explore_name, fields="fields")
-            for f in (_exp.fields.dimensions or []):
-                all_explore_fields.add(f.name)
-            for f in (_exp.fields.measures or []):
-                all_explore_fields.add(f.name)
+            try:
+                _exp = sdk.lookml_model_explore(NEW_MODEL, _explore_name, fields="fields")
+                for f in (_exp.fields.dimensions or []):
+                    all_explore_fields.add(f.name)
+                for f in (_exp.fields.measures or []):
+                    all_explore_fields.add(f.name)
+            except Exception as e:
+                print(f"❌ Could not load explore {NEW_MODEL}/{_explore_name}: {e}")
+                sys.exit(1)
 
         for entry in args.batch:
             src, dst = entry.split(":", 1) if ":" in entry else (entry, None)
@@ -1105,8 +1382,8 @@ if __name__ == "__main__":
                 if not el.query_id:
                     continue
                 q = sdk.query(str(el.query_id))
-                # Skip tiles not on the old product_facts explore
-                if q.model != "super_big_facts" or q.view != OLD_EXPLORE:
+                # Skip tiles not on the old explore
+                if q.model != NEW_MODEL or q.view != OLD_EXPLORE:
                     continue
                 el_fields = set(q.fields or []) | set((q.filters or {}).keys())
                 # Collect based_on fields from dynamic fields
@@ -1168,16 +1445,6 @@ if __name__ == "__main__":
     dest_id   = args.dest
 
     print(f"\n{'[DRY RUN] ' if dry_run else ''}Migrating dashboard {source_id} → {dest_id}")
-
-    # --check-explore: verify FIELD_MAP destinations and JOINED_VIEWS exist in new explore
-    if args.check_explore:
-        ok = check_explore(sdk, source_id)
-        sys.exit(0 if ok else 1)
-
-    # --validate: check source dashboard tiles for unmapped fields
-    if args.validate:
-        ok = validate(sdk, source_id)
-        sys.exit(0 if ok else 1)
 
     # full migration (dry-run or live)
     snapshot(sdk, dest_id, dry_run)
