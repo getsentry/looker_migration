@@ -34,7 +34,7 @@ def get_dest_from_tracker(body, source_id):
     return match.group(1) if match else None
 
 
-def upsert_tracker(sdk, source_id, dest_id, dashboard_name, status, dry_run=False):
+def upsert_tracker(sdk, source_id, dest_id, dashboard_name, status):
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     new_row = (
         f'    <tr>'
@@ -54,14 +54,11 @@ def upsert_tracker(sdk, source_id, dest_id, dashboard_name, status, dry_run=Fals
     else:
         updated = current + "\n" + new_row
 
-    if dry_run:
-        print(f"  [DRY RUN] Would update tracker: {source_id} → {dest_id} ({status})")
-        return
     sdk.update_dashboard_element(LOG_ELEMENT_ID, models.WriteDashboardElement(body_text=updated))
     print(f"  ✅ Tracker updated: {source_id} → {dest_id} ({status})")
 
 
-def get_or_create_dest(sdk, source_id, tracker_body, dry_run):
+def get_or_create_dest(sdk, source_id, tracker_body):
     existing = get_dest_from_tracker(tracker_body, source_id)
     if existing:
         print(f"  Already tracked — reusing dest {existing}")
@@ -69,11 +66,6 @@ def get_or_create_dest(sdk, source_id, tracker_body, dry_run):
 
     source = sdk.dashboard(source_id)
     folder_id = str(source.folder_id)
-
-    if dry_run:
-        print(f"  [DRY RUN] Would create blank dashboard in folder {folder_id}")
-        return source_id  # use source as a read-only proxy
-
     title = f"[migrated] {source.title or source_id}"
     created = sdk.create_dashboard(models.WriteDashboard(title=title, folder_id=folder_id))
     dest_id = str(created.id)
@@ -84,7 +76,6 @@ def get_or_create_dest(sdk, source_id, tracker_body, dry_run):
 def main():
     p = argparse.ArgumentParser(description="Batch Looker dashboard migration")
     p.add_argument("sources", nargs="+", help="Source dashboard IDs to migrate")
-    p.add_argument("--dry-run", action="store_true", help="Preview without writing")
     p.add_argument("--ini", default="looker.ini", help="Path to looker.ini")
     args = p.parse_args()
 
@@ -96,22 +87,16 @@ def main():
     for source_id in args.sources:
         print(f"\n{'=' * 50}")
         print(f"Dashboard {source_id}")
-        dest_id = get_or_create_dest(sdk, source_id, tracker_body, args.dry_run)
-
-        if dest_id == source_id and not args.dry_run:
-            print(f"  ❌ dest matches source — skipping")
-            continue
+        dest_id = get_or_create_dest(sdk, source_id, tracker_body)
 
         cmd = [sys.executable, "run_migration.py",
                "--source", source_id, "--dest", dest_id, "--ini", args.ini]
-        if args.dry_run:
-            cmd.append("--dry-run")
 
         result = subprocess.run(cmd)
 
-        status = "dry run" if args.dry_run else ("migrated" if result.returncode == 0 else "migrated with errors")
-        dashboard_name = "" if args.dry_run else (sdk.dashboard(dest_id).title or "")
-        upsert_tracker(sdk, source_id, dest_id, dashboard_name, status, dry_run=args.dry_run)
+        status = "migrated" if result.returncode == 0 else "migrated with errors"
+        dashboard_name = sdk.dashboard(dest_id).title or ""
+        upsert_tracker(sdk, source_id, dest_id, dashboard_name, status)
 
 
 if __name__ == "__main__":
