@@ -144,7 +144,7 @@ FIELD_MAPS = {
     "seer_usage_cost.feature": "organizations_seer.feature",
     "seer_pr_events.distinct_prs": "organizations_seer.distinct_prs",
     "product_facts.trace_metric_items_accepted_28d": "organizations_data_outcomes.trace_metric_items_accepted_28d",
-    "metric_type_events.metric_items": "projects_data_outcomes.metric_items",
+    "metric_type_events.metric_items": "projects_data_outcomes.metrics_accepted",
     "data_by_sdk.trace_metric_size_bytes_28d": "sdk_base_events.trace_metric_size_bytes_28d_proj_sdk",
     "data_by_sdkversion.trace_metric_items": "sdk_base_events.trace_metric_items",
     "data_by_sdk.trace_metric_items_28d": "sdk_base_events.trace_metric_items_28d_proj_sdk",
@@ -183,8 +183,8 @@ FIELD_MAPS = {
     "product_facts_emerge.distribution_builds_total": "organizations_emerge.distribution_builds_total",
     "product_facts_emerge.distribution_installs_total": "organizations_emerge.distribution_installs_total",
     "product_facts_emerge.distribution_installs_28d": "projects_emerge.distribution_installs_28d",
-    "emerge_first_adoption_dates.first_size_analysis_date_week": "organizations_feature_adoption_dates.first_size_analytics_date",
-    "emerge_first_adoption_dates.first_size_analysis_date_date": "organizations_feature_adoption_dates.first_size_analytics_date",
+    "emerge_first_adoption_dates.first_size_analysis_date_week": "organizations_feature_adoption_dates.first_size_analysis_date",
+    "emerge_first_adoption_dates.first_size_analysis_date_date": "organizations_feature_adoption_dates.first_size_analysis_date",
     "emerge_first_adoption_dates.first_distribution_build_date_week": "organizations_feature_adoption_dates.first_distribution_builds_week",
     "emerge_first_adoption_dates.first_distribution_build_date_date": "organizations_feature_adoption_dates.first_distribution_builds_date",
     "product_facts.crons_active_monitor_1d": "organizations_cron_monitoring.crons_active_monitor_1d",
@@ -536,7 +536,7 @@ FIELD_MAPS = {
     "issues_by_type_struct.daily_new_performance_issues_sum": "issues_org_type.daily_new_performance_issues_sum",
     "issues_by_type_struct.daily_resolved_performance_issues_sum": "issues_base_type.daily_resolved_performance_issues",
     "metric_type_events.median_attributes": "projects_data_outcomes.median_attributes",
-    "metric_type_events.metric_items": "projects_data_outcomes.metric_items",
+    "metric_type_events.metric_items": "projects_data_outcomes.metrics_accepted",
     "organization_uptime_summary.org_dt_total_active_monitors": "organizations.org_dt_total_active_monitors",
     "product_facts.active_organizations_count": "organizations.active_organizations_count",
     "product_facts.alert_rules": "organizations_feature_flags.alert_rules",
@@ -625,6 +625,7 @@ FIELD_MAPS = {
     "product_facts.total_profile_duration_accepted_28d": "projects_data_outcomes.profile_duration_accepted_28d",
     "product_facts.total_profile_duration_accepted_sum": "organizations_data_outcomes.profile_duration_accepted",
     "product_facts.trace_metric_items_accepted_28d": "organizations_data_outcomes.trace_metric_items_accepted_28d",
+    "product_facts.trace_metric_items_accepted_sum": "projects_data_outcomes.trace_metric_items_accepted",
     "product_facts.transaction_summary_visit_count": "projects_analytics_specific.performance_transaction_summary_visits",
     "product_facts.transactions_accepted_28d": "projects_data_outcomes.transactions_accepted_28d",
     "product_facts.transactions_client_side_sampling_rate_28d": "organizations_analytics_summary.transactions_client_side_sampling_rate_28d",
@@ -687,6 +688,7 @@ def parse_args():
     p.add_argument("--dest",          required=False, default=None, help="Destination dashboard ID (copy TO)")
     p.add_argument("--dry-run",       action="store_true", help="Preview changes without writing")
     p.add_argument("--check",         action="store_true", help="Check source dashboard fields against the destination explore (API-based, grouped by tile)")
+    p.add_argument("--check-tiles",   action="store_true", help="Check source dashboard fields tile-by-tile, mapped fields first, including dynamic field expressions")
     p.add_argument("--validate",      action="store_true", help="[deprecated] Alias for --check")
     p.add_argument("--check-explore", action="store_true", help="[deprecated] Alias for --check")
     p.add_argument("--audit",         action="store_true", help="[deprecated] Alias for --check")
@@ -759,6 +761,9 @@ def remap_dynamic_fields(dynamic_fields_str):
         if c.get("expression"):
             for old, new in FIELD_MAP.items():
                 c["expression"] = c["expression"].replace("${" + old + "}", "${" + new + "}")
+        if c.get("filter_expression"):
+            for old, new in FIELD_MAP.items():
+                c["filter_expression"] = c["filter_expression"].replace("${" + old + "}", "${" + new + "}")
         if c.get("args"):
             c["args"] = [FIELD_MAP.get(a, a) if isinstance(a, str) else a for a in c["args"]]
     return json.dumps(customs)
@@ -825,17 +830,6 @@ def is_problem_field(field):
 
 
 
-def check_explore(sdk, source_id):
-    """Deprecated — use check()."""
-    print("(--check-explore is deprecated; running --check instead)")
-    return check(sdk, source_id)
-
-def validate(sdk, source_id):
-    """Deprecated — use check()."""
-    print("(--validate is deprecated; running --check instead)")
-    return check(sdk, source_id)
-
-
 # ─────────────────────────────────────────────
 # CHECK
 # ─────────────────────────────────────────────
@@ -864,8 +858,8 @@ def check(sdk, source_id):
     elements = sdk.dashboard_dashboard_elements(source_id)
 
     # Deduped summary buckets
-    summary_bad          = {}   # old_field -> dest_field
-    summary_missing_join = set()
+    summary_bad           = {}   # old_field -> dest_field
+    summary_missing_join  = set()
     summary_missing_field = set()
     summary_needs_mapping = set()
 
@@ -960,6 +954,142 @@ def check(sdk, source_id):
     return not any_issues
 
 
+# ─────────────────────────────────────────────
+# CHECK TILES
+# ─────────────────────────────────────────────
+def _collect_tile_fields(q):
+    """Return all LookML field references in a query as {field: source_label}."""
+    fields = {}
+    for f in (q.fields or []):
+        if "." in f and not f.startswith("__"):
+            fields[f] = "field"
+    for f in (q.filters or {}).keys():
+        if "." in f and not f.startswith("__"):
+            fields[f] = "filter"
+    for s in (q.sorts or []):
+        f = s.split(" ")[0]
+        if "." in f and not f.startswith("__"):
+            fields[f] = "sort"
+    if q.dynamic_fields:
+        try:
+            for d in json.loads(q.dynamic_fields):
+                label = d.get("label") or d.get("table_calculation") or "(unnamed)"
+                f = d.get("based_on", "")
+                if f and "." in f and not f.startswith("__"):
+                    fields[f] = f"dynamic '{label}' based_on"
+                for ref in re.findall(r'\$\{([^}]+)\}', d.get("expression") or ""):
+                    if "." in ref and not ref.startswith("__"):
+                        fields[ref] = f"dynamic '{label}' expression"
+                for fk in (d.get("filters") or {}).keys():
+                    if "." in fk and not fk.startswith("__"):
+                        fields[fk] = f"dynamic '{label}' filter"
+        except Exception:
+            pass
+    return fields
+
+
+def check_tiles(sdk, source_id):
+    print(f"\n=== Checking source dashboard {source_id} against {NEW_MODEL}/{NEW_EXPLORE} ===\n")
+
+    dest_fields = set()
+    dest_views  = set()
+    for explore_name in (NEW_EXPLORE, NEW_EXPLORE_2):
+        try:
+            exp = sdk.lookml_model_explore(NEW_MODEL, explore_name, fields="fields,joins")
+        except Exception as e:
+            print(f"❌ Could not load explore {NEW_MODEL}/{explore_name}: {e}")
+            sys.exit(1)
+        for f in (exp.fields.dimensions or []):
+            dest_fields.add(f.name)
+        for f in (exp.fields.measures or []):
+            dest_fields.add(f.name)
+        dest_views.update(f.split(".")[0] for f in dest_fields)
+        if exp.joins:
+            for j in exp.joins:
+                if j.name:
+                    dest_views.add(j.name)
+
+    elements = sdk.dashboard_dashboard_elements(source_id)
+
+    summary_bad           = {}   # old_field -> dest_field
+    summary_missing_join  = set()
+    summary_missing_field = set()
+
+    for el in elements:
+        if not el.query_id:
+            continue
+        q = sdk.query(str(el.query_id))
+        tile_title = el.title or "(untitled)"
+
+        fields = _collect_tile_fields(q)
+        if not fields:
+            continue
+
+        ok, mapped, bad, missing_join, missing_field = [], [], [], [], []
+
+        for f in sorted(fields):
+            if f in FIELD_MAP:
+                dest = FIELD_MAP[f]
+                if dest in dest_fields:
+                    mapped.append((f, dest))
+                else:
+                    bad.append((f, dest))
+                    summary_bad[f] = dest
+            elif f in dest_fields:
+                ok.append(f)
+            else:
+                view = f.split(".")[0]
+                if view not in dest_views:
+                    missing_join.append(f)
+                    summary_missing_join.add(f)
+                else:
+                    missing_field.append(f)
+                    summary_missing_field.add(f)
+
+        print(f"  Tile: '{tile_title}'")
+        for f in ok:
+            print(f"    ✅ {f}")
+        for f, dest in mapped:
+            print(f"    ✅ {f} → {dest}")
+        for f, dest in bad:
+            print(f"    ❌ {f} → {dest}  (FIELD_MAP destination not in explore)")
+        for f in missing_join:
+            print(f"    🔴 {f}  (view not joined into explore)  [{fields[f]}]")
+        for f in missing_field:
+            print(f"    🟡 {f}  (view is joined but field doesn't exist in LookML)  [{fields[f]}]")
+        print()
+
+    any_issues = summary_bad or summary_missing_join or summary_missing_field
+    print("=== Summary ===")
+    if not any_issues:
+        print("✅ All fields accounted for.")
+    else:
+        if summary_bad:
+            print("❌ Bad mappings (FIELD_MAP destination missing from explore):")
+            for old, dest in sorted(summary_bad.items()):
+                print(f"   {old} → {dest}")
+        if summary_missing_join:
+            print("🔴 Missing joins (view not joined into explore — fix in LookML explore definition):")
+            for f in sorted(summary_missing_join):
+                print(f"   {f}")
+        if summary_missing_field:
+            print("🟡 Missing fields (view is joined but dimension/measure needs to be written in LookML):")
+            for f in sorted(summary_missing_field):
+                print(f"   {f}")
+
+    return not any_issues
+
+
+def validate(sdk, source_id):
+    """Deprecated — use check()."""
+    print("(--validate is deprecated; running --check instead)")
+    return check(sdk, source_id)
+
+def check_explore(sdk, source_id):
+    """Deprecated — use check()."""
+    print("(--check-explore is deprecated; running --check instead)")
+    return check(sdk, source_id)
+
 def audit(sdk, source_id):
     """Deprecated — use check()."""
     print("(--audit is deprecated; running --check instead)")
@@ -1020,11 +1150,11 @@ def copy_vis_config_from_source(sdk, source_id, dest_id, dry_run):
     except Exception:
         _explore_fields = set()
 
-    source_elements = sdk.dashboard_dashboard_elements(source_id, fields="id,title,query_id,result_maker")
-    dest_elements   = sdk.dashboard_dashboard_elements(dest_id)
+    source_elements = sdk.dashboard_dashboard_elements(source_id, fields="id,title,query_id,result_maker,row,col")
+    dest_elements   = sdk.dashboard_dashboard_elements(dest_id, fields="id,title,query_id,result_maker,row,col")
 
     source_by_title    = {}
-    source_by_query_id = {}
+    source_by_position = {}
     for el in source_elements:
         vc, loc = extract_vis_config(el)
         if not vc:
@@ -1032,21 +1162,21 @@ def copy_vis_config_from_source(sdk, source_id, dest_id, dry_run):
         title_key = (el.title or "").strip().lower()
         if title_key:
             source_by_title[title_key] = (vc, loc, el)
-        elif el.query_id:
-            source_by_query_id[str(el.query_id)] = (vc, loc, el)
+        else:
+            source_by_position[(el.row, el.col)] = (vc, loc, el)
 
-    print(f"  Found vis_config for {len(source_by_title) + len(source_by_query_id)} tiles in source")
+    print(f"  Found vis_config for {len(source_by_title) + len(source_by_position)} tiles in source")
 
     for el in dest_elements:
         if not el.query_id:
             continue
         title_key = (el.title or "").strip().lower()
 
-        # Match by title first, then fall back to query_id for untitled tiles
+        # Match by title first, then fall back to position for untitled tiles
         if title_key and title_key in source_by_title:
             vc, loc, src_el = source_by_title[title_key]
-        elif not title_key and str(el.query_id) in source_by_query_id:
-            vc, loc, src_el = source_by_query_id[str(el.query_id)]
+        elif not title_key and (el.row, el.col) in source_by_position:
+            vc, loc, src_el = source_by_position[(el.row, el.col)]
         else:
             print(f"  ⚠️  '{el.title}' — no matching tile in source")
             continue
@@ -1334,6 +1464,11 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"⚠️  Could not switch to v2-migration branch (proceeding on current branch): {e}")
 
+    # --check-tiles runs in dev so it sees fields on the migration branch
+    if args.check_tiles:
+        ok = check_tiles(sdk, args.source)
+        sys.exit(0 if ok else 1)
+
     # Load both explore view sets for routing and is_problem_field
     try:
         _views1, _views2, _excl1, _excl2 = build_explore_view_sets(sdk)
@@ -1448,9 +1583,9 @@ if __name__ == "__main__":
 
     # full migration (dry-run or live)
     snapshot(sdk, dest_id, dry_run)
-    copy_vis_config_from_source(sdk, source_id, dest_id, dry_run)
     fix_dashboard_filters(sdk, dest_id, dry_run)
     swap_and_fix_tiles(sdk, dest_id, dry_run)
+    copy_vis_config_from_source(sdk, source_id, dest_id, dry_run)
     reconnect_dashboard_filters(sdk, source_id, dest_id, dry_run)
     verify(sdk, dest_id)
     print(f"\n✓ Done — snapshot saved to snapshot_{dest_id}.json")
