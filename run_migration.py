@@ -27,6 +27,7 @@ import sys
 import looker_sdk
 from looker_sdk import models40 as models
 from mappings import OLD_EXPLORE, NEW_MODEL, NEW_EXPLORE, NEW_EXPLORE_2, JOINED_VIEWS_IN_NEW_EXPLORE, FIELD_MAPS, FIELD_MAP
+from checks import check, batch_check
 
 
 # ─────────────────────────────────────────────
@@ -68,38 +69,38 @@ def extract_vis_config(element, query=None):
             return vc, "query.vis_config"
     return None, "not found"
 
-def remap_fields(fields, tile_title=None):
+def remap_fields(fields, field_map, tile_title=None):
     if not fields:
         return fields
     result = []
     for f in fields:
-        if is_problem_field(f):
+        if is_problem_field(f, field_map):
             print(f"  ⚠️  WILL BREAK '{tile_title}' — field not available in new explore: {f}")
-        result.append(FIELD_MAP.get(f, f))
+        result.append(field_map.get(f, f))
     return result
 
-def remap_filters(filters, tile_title=None):
+def remap_filters(filters, field_map, tile_title=None):
     if not filters:
         return filters
     result = {}
     for k, v in filters.items():
-        if is_problem_field(k):
+        if is_problem_field(k, field_map):
             print(f"  ⚠️  WILL BREAK '{tile_title}' — filter not available in new explore: {k}")
-        result[FIELD_MAP.get(k, k)] = v
+        result[field_map.get(k, k)] = v
     return result
 
-def remap_sorts(sorts):
+def remap_sorts(sorts, field_map):
     if not sorts:
         return sorts
     new_sorts = []
     for sort in sorts:
-        for old, new in FIELD_MAP.items():
+        for old, new in field_map.items():
             if old in sort:
                 sort = sort.replace(old, new)
         new_sorts.append(sort)
     return new_sorts
 
-def remap_vis_config(vc):
+def remap_vis_config(vc, field_map):
     """Remap field names inside vis_config for keys that reference LookML fields."""
     if not vc:
         return vc
@@ -113,34 +114,34 @@ def remap_vis_config(vc):
     )
     for key in dict_keyed:
         if vc.get(key) and isinstance(vc[key], dict):
-            vc[key] = {FIELD_MAP.get(k, k): v for k, v in vc[key].items()}
+            vc[key] = {field_map.get(k, k): v for k, v in vc[key].items()}
 
     # Keys whose values are lists of field names
     list_keyed = ("hidden_fields", "column_order", "hidden_pivots")
     for key in list_keyed:
         if vc.get(key) and isinstance(vc[key], list):
-            vc[key] = [FIELD_MAP.get(f, f) for f in vc[key]]
+            vc[key] = [field_map.get(f, f) for f in vc[key]]
 
     return vc
 
 
-def remap_dynamic_fields(dynamic_fields_str):
+def remap_dynamic_fields(dynamic_fields_str, field_map):
     if not dynamic_fields_str:
         return dynamic_fields_str
     customs = json.loads(dynamic_fields_str)
     for c in customs:
-        if c.get("based_on") in FIELD_MAP:
-            c["based_on"] = FIELD_MAP[c["based_on"]]
+        if c.get("based_on") in field_map:
+            c["based_on"] = field_map[c["based_on"]]
         if c.get("filters"):
-            c["filters"] = {FIELD_MAP.get(k, k): v for k, v in c["filters"].items()}
+            c["filters"] = {field_map.get(k, k): v for k, v in c["filters"].items()}
         if c.get("expression"):
-            for old, new in FIELD_MAP.items():
+            for old, new in field_map.items():
                 c["expression"] = c["expression"].replace("${" + old + "}", "${" + new + "}")
         if c.get("filter_expression"):
-            for old, new in FIELD_MAP.items():
+            for old, new in field_map.items():
                 c["filter_expression"] = c["filter_expression"].replace("${" + old + "}", "${" + new + "}")
         if c.get("args"):
-            c["args"] = [FIELD_MAP.get(a, a) if isinstance(a, str) else a for a in c["args"]]
+            c["args"] = [field_map.get(a, a) if isinstance(a, str) else a for a in c["args"]]
     return json.dumps(customs)
 
 # Populated at runtime after SDK is initialized and dev mode is set
@@ -187,13 +188,13 @@ def route_explore(fields, exclusive1, exclusive2):
     print(f"  defaulting to {NEW_EXPLORE}")
     return NEW_EXPLORE
 
-def is_problem_field(field):
+def is_problem_field(field, field_map):
     """Returns True if a field needs to be flagged — it's from OLD_EXPLORE and unmapped,
     or from a view that isn't in the new explore (checked via API if available)."""
     if not field or "." not in field:
         return False
     view = field.split(".")[0]
-    if field in FIELD_MAP:
+    if field in field_map:
         return False  # explicitly remapped, fine
     if view == OLD_EXPLORE:
         return True   # from old explore and not remapped
@@ -206,129 +207,6 @@ def is_problem_field(field):
 
 
 
-
-# ─────────────────────────────────────────────
-# CHECK
-# ─────────────────────────────────────────────
-def check(sdk, source_id):
-    print(f"\n=== Checking source dashboard {source_id} against {NEW_MODEL}/{NEW_EXPLORE} ===\n")
-
-    try:
-        exp = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields,joins")
-    except Exception as e:
-        print(f"❌ Could not load explore {NEW_MODEL}/{NEW_EXPLORE}: {e}")
-        sys.exit(1)
-
-    dest_fields = set()
-    for f in (exp.fields.dimensions or []):
-        dest_fields.add(f.name)
-    for f in (exp.fields.measures or []):
-        dest_fields.add(f.name)
-
-    # Views that are actually joined into the explore
-    dest_views = {f.split(".")[0] for f in dest_fields}
-    if exp.joins:
-        for j in exp.joins:
-            if j.name:
-                dest_views.add(j.name)
-
-    elements = sdk.dashboard_dashboard_elements(source_id)
-
-    # Deduped summary buckets
-    summary_bad           = {}   # old_field -> dest_field
-    summary_missing_join  = set()
-    summary_missing_field = set()
-    summary_needs_mapping = set()
-
-    for el in elements:
-        if not el.query_id:
-            continue
-        q = sdk.query(str(el.query_id))
-        tile_title = el.title or "(untitled)"
-
-        fields = set()
-        for f in (q.fields or []):
-            if "." in f and not f.startswith("__"):
-                fields.add(f)
-        for f in (q.filters or {}).keys():
-            if "." in f and not f.startswith("__"):
-                fields.add(f)
-        for s in (q.sorts or []):
-            f = s.split(" ")[0]
-            if "." in f and not f.startswith("__"):
-                fields.add(f)
-        if q.dynamic_fields:
-            try:
-                for d in json.loads(q.dynamic_fields):
-                    f = d.get("based_on", "")
-                    if f and "." in f and not f.startswith("__"):
-                        fields.add(f)
-            except Exception:
-                pass
-
-        if not fields:
-            continue
-
-        ok, mapped, bad = [], [], []
-        missing_join, missing_field, needs_mapping = [], [], []
-
-        for f in sorted(fields):
-            if f in dest_fields:
-                ok.append(f)
-            elif f in FIELD_MAP:
-                dest = FIELD_MAP[f]
-                if dest in dest_fields:
-                    mapped.append((f, dest))
-                else:
-                    bad.append((f, dest))
-                    summary_bad[f] = dest
-            else:
-                view = f.split(".")[0]
-                if view not in dest_views:
-                    missing_join.append(f)
-                    summary_missing_join.add(f)
-                else:
-                    missing_field.append(f)
-                    summary_missing_field.add(f)
-
-        print(f"  Tile: '{tile_title}'")
-        for f in ok:
-            print(f"    ✅ {f}")
-        for f, dest in mapped:
-            print(f"    ✅ {f} → {dest}")
-        for f, dest in bad:
-            print(f"    ❌ {f} → {dest}  (FIELD_MAP destination not in explore)")
-        for f in missing_join:
-            print(f"    🔴 {f}  (view not joined into explore)")
-        for f in missing_field:
-            print(f"    🟡 {f}  (view is joined but field doesn't exist in LookML)")
-        for f in needs_mapping:
-            print(f"    ⚠️  {f}  (exists in explore but not in FIELD_MAP)")
-        print()
-
-    any_issues = summary_bad or summary_missing_join or summary_missing_field or summary_needs_mapping
-    print("=== Summary ===")
-    if not any_issues:
-        print("✅ All fields accounted for.")
-    else:
-        if summary_bad:
-            print("❌ Bad mappings (FIELD_MAP destination missing from explore):")
-            for old, dest in sorted(summary_bad.items()):
-                print(f"   {old} → {dest}")
-        if summary_missing_join:
-            print("🔴 Missing joins (view not joined into explore — fix in LookML explore definition):")
-            for f in sorted(summary_missing_join):
-                print(f"   {f}")
-        if summary_missing_field:
-            print("🟡 Missing fields (view is joined but dimension/measure needs to be written in LookML):")
-            for f in sorted(summary_missing_field):
-                print(f"   {f}")
-        if summary_needs_mapping:
-            print("⚠️  Needs mapping (field exists in explore but is missing from FIELD_MAP):")
-            for f in sorted(summary_needs_mapping):
-                print(f"   {f}")
-
-    return not any_issues
 
 # ─────────────────────────────────────────────
 # STEP 1: Snapshot
@@ -415,22 +293,24 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
         if el.query_id:
             q = sdk.query(str(el.query_id))
             vc, _ = extract_vis_config(el, q)
-            remapped_fields  = remap_fields(q.fields, el.title)
-            remapped_filters = remap_filters(q.filters, el.title)
-            target_explore   = route_explore(
-                list(remapped_fields or []) + list((remapped_filters or {}).keys()),
+            # Route on source fields first so we can select the right field map
+            target_explore = route_explore(
+                list(q.fields or []) + list((q.filters or {}).keys()),
                 _EXCLUSIVE_1, _EXCLUSIVE_2,
             )
+            field_map = FIELD_MAPS.get((OLD_EXPLORE, target_explore), FIELD_MAP)
+            remapped_fields  = remap_fields(q.fields, field_map, el.title)
+            remapped_filters = remap_filters(q.filters, field_map, el.title)
             new_query = sdk.create_query(models.WriteQuery(
                 model=NEW_MODEL,
                 view=target_explore,
                 fields=remapped_fields,
                 filters=remapped_filters,
-                sorts=remap_sorts(q.sorts),
+                sorts=remap_sorts(q.sorts, field_map),
                 limit=q.limit,
-                dynamic_fields=remap_dynamic_fields(q.dynamic_fields),
-                pivots=remap_fields(q.pivots),
-                vis_config=remap_vis_config(vc),
+                dynamic_fields=remap_dynamic_fields(q.dynamic_fields, field_map),
+                pivots=remap_fields(q.pivots, field_map),
+                vis_config=remap_vis_config(vc, field_map),
                 total=q.total,
                 row_total=q.row_total,
                 filter_config=None,
@@ -461,7 +341,7 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
                     listen=[
                         models.ResultMakerFilterablesListen(
                             dashboard_filter_name=l.dashboard_filter_name,
-                            field=FIELD_MAP.get(l.field, l.field),
+                            field=field_map.get(l.field, l.field),
                         ) for l in (f.listen or [])
                     ]
                 ) for f in el.result_maker.filterables
@@ -498,23 +378,24 @@ def verify(sdk, dest_id):
     dashboard = sdk.dashboard(dest_id)
 
     for f in (dashboard.dashboard_filters or []):
-        if f.dimension and is_problem_field(f.dimension):
+        if f.dimension and is_problem_field(f.dimension, FIELD_MAP):
             issues.append(f"Dashboard filter '{f.title}': {f.dimension}")
 
     for el in elements:
         if not el.query_id:
             continue
         q = sdk.query(str(el.query_id))
+        field_map = FIELD_MAPS.get((OLD_EXPLORE, q.view), FIELD_MAP)
         if q.view == OLD_EXPLORE:
             issues.append(f"Tile '{el.title}' still on old explore")
         if q.filters:
             for field in q.filters:
-                if is_problem_field(field):
+                if is_problem_field(field, field_map):
                     issues.append(f"Tile '{el.title}' filter: {field}")
         if q.sorts:
             for sort in q.sorts:
                 field = sort.split(" ")[0]
-                if is_problem_field(field):
+                if is_problem_field(field, field_map):
                     issues.append(f"Tile '{el.title}' sort: {sort}")
         vc, loc = extract_vis_config(el, q)
         if not vc:
@@ -581,99 +462,7 @@ if __name__ == "__main__":
 
     # --batch: validate multiple dashboards, deduped missing fields
     if args.batch:
-        from collections import defaultdict
-        missing = defaultdict(lambda: {"new_field": None, "dashboards": defaultdict(set)})
-        statuses = {}
-
-        print(f"\n=== Batch Pre-Migration Check: {len(args.batch)} dashboards ===\n")
-
-        # Load explore fields once (both explores)
-        all_explore_fields = set()
-        for _explore_name in (NEW_EXPLORE, NEW_EXPLORE_2):
-            try:
-                _exp = sdk.lookml_model_explore(NEW_MODEL, _explore_name, fields="fields")
-                for f in (_exp.fields.dimensions or []):
-                    all_explore_fields.add(f.name)
-                for f in (_exp.fields.measures or []):
-                    all_explore_fields.add(f.name)
-            except Exception as e:
-                print(f"❌ Could not load explore {NEW_MODEL}/{_explore_name}: {e}")
-                sys.exit(1)
-
-        for entry in args.batch:
-            src, dst = entry.split(":", 1) if ":" in entry else (entry, None)
-            label = f"{src} -> {dst}" if dst else src
-            print(f"Checking {label}...", end=" ", flush=True)
-
-            try:
-                elements = sdk.dashboard_dashboard_elements(src)
-            except Exception as e:
-                print(f"❌ could not fetch: {e}")
-                statuses[label] = "❌"
-                continue
-
-            dashboard_issues = False
-            for el in elements:
-                if not el.query_id:
-                    continue
-                q = sdk.query(str(el.query_id))
-                # Skip tiles not on the old explore
-                if q.model != NEW_MODEL or q.view != OLD_EXPLORE:
-                    continue
-                el_fields = set(q.fields or []) | set((q.filters or {}).keys())
-                # Collect based_on fields from dynamic fields
-                based_on_fields = set()
-                if q.dynamic_fields:
-                    try:
-                        for d in json.loads(q.dynamic_fields):
-                            if d.get("based_on"):
-                                based_on_fields.add(d["based_on"])
-                    except Exception:
-                        pass
-                tile = el.title or "(untitled)"
-                # Only real LookML fields, skip table calc names like __calc__
-                lookml_fields = {f for f in el_fields if "." in f and not f.startswith("__")}
-                lookml_fields |= {f for f in based_on_fields if "." in f and not f.startswith("__")}
-                for f in lookml_fields:
-                    new_field = FIELD_MAP.get(f)
-                    if new_field:
-                        # Field is mapped — check the destination exists in new explore
-                        if new_field not in all_explore_fields:
-                            missing[f]["new_field"] = new_field
-                            missing[f]["dashboards"][label].add(tile)
-                            dashboard_issues = True
-                    elif f not in all_explore_fields:
-                        # Field is not mapped and not in new explore — genuinely missing
-                        missing[f]["new_field"] = None
-                        missing[f]["dashboards"][label].add(tile)
-                        dashboard_issues = True
-                    # else: field exists in new explore already, no action needed
-            statuses[label] = "⚠️" if dashboard_issues else "✅"
-            print(statuses[label])
-
-        print()
-        if missing:
-            print("=== Missing Fields ===")
-            for i, (old_field, info) in enumerate(missing.items(), 1):
-                new_field = info["new_field"]
-                if new_field:
-                    print(f"{i}. {old_field} -> ❌ {new_field} (missing in new explore)")
-                else:
-                    print(f"{i}. {old_field} — not in FIELD_MAP")
-                for dash, tiles in info["dashboards"].items():
-                    tile_list = ", ".join(f"'{t}'" for t in sorted(tiles))
-                    print(f"   dashboard {dash}: {tile_list}")
-        else:
-            print("✅ All dashboards clean — safe to migrate")
-
-        print()
-        ready = sum(1 for s in statuses.values() if s == "✅")
-        needs = sum(1 for s in statuses.values() if s == "⚠️")
-        print("=== Summary ===")
-        if ready:
-            print(f"✅ {ready} dashboard(s) ready to migrate")
-        if needs:
-            print(f"⚠️  {needs} dashboard(s) need attention — fix fields above then re-run")
+        batch_check(sdk, args.batch)
         sys.exit(0)
 
     source_id = args.source
