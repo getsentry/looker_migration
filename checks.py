@@ -9,30 +9,35 @@ import json
 import sys
 from collections import defaultdict
 
-from mappings import OLD_EXPLORE, NEW_MODEL, NEW_EXPLORE, NEW_EXPLORE_2, FIELD_MAP
+from mappings import OLD_EXPLORE, NEW_MODEL, NEW_EXPLORE, NEW_EXPLORE_2, FIELD_MAPS
+
+# Combined field map across both destination explores
+_COMBINED_FIELD_MAP = {
+    **FIELD_MAPS.get((OLD_EXPLORE, NEW_EXPLORE), {}),
+    **FIELD_MAPS.get((OLD_EXPLORE, NEW_EXPLORE_2), {}),
+}
 
 
 def check(sdk, source_id):
-    print(f"\n=== Checking source dashboard {source_id} against {NEW_MODEL}/{NEW_EXPLORE} ===\n")
-
-    try:
-        exp = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields,joins")
-    except Exception as e:
-        print(f"❌ Could not load explore {NEW_MODEL}/{NEW_EXPLORE}: {e}")
-        sys.exit(1)
+    print(f"\n=== Checking source dashboard {source_id} against {NEW_MODEL}/{NEW_EXPLORE} + {NEW_EXPLORE_2} ===\n")
 
     dest_fields = set()
-    for f in (exp.fields.dimensions or []):
-        dest_fields.add(f.name)
-    for f in (exp.fields.measures or []):
-        dest_fields.add(f.name)
-
-    # Views that are actually joined into the explore
-    dest_views = {f.split(".")[0] for f in dest_fields}
-    if exp.joins:
-        for j in exp.joins:
-            if j.name:
-                dest_views.add(j.name)
+    dest_views  = set()
+    for explore_name in (NEW_EXPLORE, NEW_EXPLORE_2):
+        try:
+            exp = sdk.lookml_model_explore(NEW_MODEL, explore_name, fields="fields,joins")
+        except Exception as e:
+            print(f"❌ Could not load explore {NEW_MODEL}/{explore_name}: {e}")
+            sys.exit(1)
+        for f in (exp.fields.dimensions or []):
+            dest_fields.add(f.name)
+        for f in (exp.fields.measures or []):
+            dest_fields.add(f.name)
+        dest_views.update(f.split(".")[0] for f in dest_fields)
+        if exp.joins:
+            for j in exp.joins:
+                if j.name:
+                    dest_views.add(j.name)
 
     elements = sdk.dashboard_dashboard_elements(source_id)
 
@@ -77,8 +82,8 @@ def check(sdk, source_id):
         for f in sorted(fields):
             if f in dest_fields:
                 ok.append(f)
-            elif f in FIELD_MAP:
-                dest = FIELD_MAP[f]
+            elif f in _COMBINED_FIELD_MAP:
+                dest = _COMBINED_FIELD_MAP[f]
                 if dest in dest_fields:
                     mapped.append((f, dest))
                 else:
@@ -187,7 +192,7 @@ def batch_check(sdk, entries):
             lookml_fields = {f for f in el_fields if "." in f and not f.startswith("__")}
             lookml_fields |= {f for f in based_on_fields if "." in f and not f.startswith("__")}
             for f in lookml_fields:
-                new_field = FIELD_MAP.get(f)
+                new_field = _COMBINED_FIELD_MAP.get(f)
                 if new_field:
                     # Field is mapped — check the destination exists in new explore
                     if new_field not in all_explore_fields:

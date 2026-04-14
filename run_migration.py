@@ -439,17 +439,16 @@ if __name__ == "__main__":
     NEW_MODEL   = args.model
     NEW_EXPLORE = args.explore_to
 
-    # --check runs against production — do it before switching to dev
-    if args.check or args.audit or args.validate or args.check_explore:
-        ok = check(sdk, args.source)
-        sys.exit(0 if ok else 1)
-
     if not args.production:
         sdk.update_session(models.WriteApiSession(workspace_id="dev"))
     try:
         sdk.update_git_branch(project_id=NEW_MODEL, body=models.WriteGitBranch(name="v2-migration"))
     except Exception as e:
         print(f"⚠️  Could not switch to v2-migration branch (proceeding on current branch): {e}")
+
+    if args.check or args.audit or args.validate or args.check_explore:
+        ok = check(sdk, args.source)
+        sys.exit(0 if ok else 1)
 
     # Load both explore view sets for routing and is_problem_field
     try:
