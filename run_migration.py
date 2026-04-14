@@ -749,6 +749,31 @@ def remap_sorts(sorts):
         new_sorts.append(sort)
     return new_sorts
 
+def remap_vis_config(vc):
+    """Remap field names inside vis_config for keys that reference LookML fields."""
+    if not vc:
+        return vc
+    vc = dict(vc)  # shallow copy — don't mutate the source
+
+    # Keys whose values are dicts keyed by field name
+    dict_keyed = (
+        "series_colors", "series_labels", "series_types", "series_point_styles",
+        "series_collapsed", "series_cell_visualizations", "series_value_format",
+        "series_text_format", "series_sizing", "series_axis_id", "series_error_type",
+    )
+    for key in dict_keyed:
+        if vc.get(key) and isinstance(vc[key], dict):
+            vc[key] = {FIELD_MAP.get(k, k): v for k, v in vc[key].items()}
+
+    # Keys whose values are lists of field names
+    list_keyed = ("hidden_fields", "column_order", "hidden_pivots")
+    for key in list_keyed:
+        if vc.get(key) and isinstance(vc[key], list):
+            vc[key] = [FIELD_MAP.get(f, f) for f in vc[key]]
+
+    return vc
+
+
 def remap_dynamic_fields(dynamic_fields_str):
     if not dynamic_fields_str:
         return dynamic_fields_str
@@ -1221,7 +1246,7 @@ def copy_vis_config_from_source(sdk, source_id, dest_id, dry_run):
                 limit=existing_query.limit,
                 dynamic_fields=existing_query.dynamic_fields,
                 pivots=existing_query.pivots,
-                vis_config=vc,
+                vis_config=remap_vis_config(vc),
                 total=src_total,
                 row_total=src_row_total,
                 filter_config=None,  # must be null per API docs to avoid unexpected filtering
