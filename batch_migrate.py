@@ -65,9 +65,8 @@ def get_or_create_dest(sdk, source_id, tracker_body):
         return existing
 
     source = sdk.dashboard(source_id)
-    folder_id = str(source.folder_id)
     title = f"[migrated] {source.title or source_id}"
-    created = sdk.create_dashboard(models.WriteDashboard(title=title, folder_id=folder_id))
+    created = sdk.create_dashboard(models.WriteDashboard(title=title, folder_id="928"))
     dest_id = str(created.id)
     print(f"  Created blank: '{title}' (dashboard {dest_id})")
     return dest_id
