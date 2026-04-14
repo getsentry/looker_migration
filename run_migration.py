@@ -979,7 +979,7 @@ def check(sdk, source_id):
     return not any_issues
 
 # ─────────────────────────────────────────────
-# STEP 1: Snapshot and delete tiles
+# STEP 1: Snapshot
 # ─────────────────────────────────────────────
 def snapshot(sdk, dest_id, dry_run):
     print(f"\n=== Step 1: Snapshot dashboard {dest_id} ===")
@@ -1015,6 +1015,92 @@ def snapshot(sdk, dest_id, dry_run):
     print(f"✓ Snapshot saved to {fname} ({len(snapshot_data)} tiles)")
 
 
+# ─────────────────────────────────────────────
+# STEP 1b: Delete tiles and copy source dashboard
+# ─────────────────────────────────────────────
+def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id, dry_run):
+    print(f"\n=== Step 1b: Delete dest tiles and copy from source {source_id} ===")
+
+    dest_elements    = sdk.dashboard_dashboard_elements(dest_id)
+    source_elements  = sdk.dashboard_dashboard_elements(source_id)
+    source_dashboard = sdk.dashboard(source_id)
+
+    if dry_run:
+        print("  [DRY RUN] Skipping delete and copy step")
+        return
+
+    # ── 1. Delete everything on the dest dashboard ───────────────────────────
+    dest_dashboard = sdk.dashboard(dest_id)
+    for f in (dest_dashboard.dashboard_filters or []):
+        sdk.delete_dashboard_filter(str(f.id))
+    for el in dest_elements:
+        sdk.delete_dashboard_element(str(el.id))
+
+    # ── 2. Recreate dashboard-level filters from source ───────────────────────
+    for f in (source_dashboard.dashboard_filters or []):
+        sdk.create_dashboard_filter(
+            models.WriteCreateDashboardFilter(
+                dashboard_id=str(dest_id),
+                name=f.name,
+                title=f.title,
+                type=f.type,
+                default_value=f.default_value,
+                model=f.model,
+                explore=f.explore,
+                dimension=f.dimension,
+                row=f.row,
+                listens_to_filters=f.listens_to_filters,
+                allow_multiple_values=f.allow_multiple_values,
+                required=f.required,
+                ui_config=f.ui_config,
+            )
+        )
+        print(f"  filter: {f.title}")
+
+    # Build source position map and get dest layout ID before the loop
+    src_layout   = next((l for l in sdk.dashboard_dashboard_layouts(str(source_id)) if getattr(l, "active", False)), None)
+    src_pos      = {c.dashboard_element_id: c for c in (src_layout.dashboard_layout_components or [])} if src_layout else {}
+    dst_layout_id = next((str(l.id) for l in sdk.dashboard_dashboard_layouts(str(dest_id)) if getattr(l, "active", False)), None)
+
+    # ── 3. Recreate elements, link filters, restore positions ────────────────
+    for el in source_elements:
+        new_el = sdk.create_dashboard_element(models.WriteDashboardElement(
+            dashboard_id=str(dest_id),
+            query_id=el.query_id,
+            title=el.title,
+            title_hidden=el.title_hidden,
+            subtitle_text=el.subtitle_text,
+            body_text=el.body_text,
+            note_text=el.note_text,
+            note_display=el.note_display,
+            note_state=el.note_state,
+            type=el.type,
+            rich_content_json=el.rich_content_json,
+        ))
+        print(f"  tile: {el.title}")
+
+        if el.result_maker and el.result_maker.filterables:
+            sdk.update_dashboard_element(str(new_el.id), models.WriteDashboardElement(
+                result_maker=models.WriteResultMakerWithIdVisConfigAndDynamicFields(
+                    filterables=el.result_maker.filterables)
+            ))
+
+        if dst_layout_id and el.id in src_pos:
+            c = src_pos[el.id]
+            fresh_comps = {x.dashboard_element_id: x for x in (sdk.dashboard_layout(dst_layout_id).dashboard_layout_components or [])}
+            if new_el.id in fresh_comps:
+                sdk.update_dashboard_layout_component(str(fresh_comps[new_el.id].id),
+                    models.WriteDashboardLayoutComponent(
+                        dashboard_layout_id=dst_layout_id,
+                        dashboard_element_id=str(new_el.id),
+                        row=c.row,
+                        column=c.column,
+                        width=c.width,
+                        height=c.height,
+                    ))
+                print(f"  positioned: {el.title}")
+
+        
 # ─────────────────────────────────────────────
 # STEP 1b: Copy vis_config from source
 # ─────────────────────────────────────────────
@@ -1464,9 +1550,8 @@ if __name__ == "__main__":
 
     # full migration (dry-run or live)
     snapshot(sdk, dest_id, dry_run)
+    delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id, dry_run)
     fix_dashboard_filters(sdk, dest_id, dry_run)
-    swap_and_fix_tiles(sdk, dest_id, dry_run)
-    copy_vis_config_from_source(sdk, source_id, dest_id, dry_run)
     reconnect_dashboard_filters(sdk, source_id, dest_id, dry_run)
     verify(sdk, dest_id)
     print(f"\n✓ Done — snapshot saved to snapshot_{dest_id}.json")
