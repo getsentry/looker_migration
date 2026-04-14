@@ -1016,10 +1016,10 @@ def snapshot(sdk, dest_id, dry_run):
 
 
 # ─────────────────────────────────────────────
-# STEP 1b: Delete tiles and copy source dashboard
+# STEP 2: Delete tiles and copy source dashboard
 # ─────────────────────────────────────────────
 def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id, dry_run):
-    print(f"\n=== Step 1b: Delete dest tiles and copy from source {source_id} ===")
+    print(f"\n=== Step 2: Delete dest tiles and copy from source {source_id} ===")
 
     dest_elements    = sdk.dashboard_dashboard_elements(dest_id)
     source_elements  = sdk.dashboard_dashboard_elements(source_id)
@@ -1047,7 +1047,7 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id, dry_run):
                 default_value=f.default_value,
                 model=f.model,
                 explore=f.explore,
-                dimension=f.dimension,
+                dimension=FIELD_MAP.get(f.dimension, f.dimension),
                 row=f.row,
                 listens_to_filters=f.listens_to_filters,
                 allow_multiple_values=f.allow_multiple_values,
@@ -1062,11 +1062,38 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id, dry_run):
     src_pos      = {c.dashboard_element_id: c for c in (src_layout.dashboard_layout_components or [])} if src_layout else {}
     dst_layout_id = next((str(l.id) for l in sdk.dashboard_dashboard_layouts(str(dest_id)) if getattr(l, "active", False)), None)
 
-    # ── 3. Recreate elements, link filters, restore positions ────────────────
+    # ── 3. Recreate elements (with remapping), link filters, restore positions ─
     for el in source_elements:
+        if el.query_id:
+            q = sdk.query(str(el.query_id))
+            vc, _ = extract_vis_config(el, q)
+            remapped_fields  = remap_fields(q.fields, el.title)
+            remapped_filters = remap_filters(q.filters, el.title)
+            target_explore   = route_explore(
+                list(remapped_fields or []) + list((remapped_filters or {}).keys()),
+                _EXCLUSIVE_1, _EXCLUSIVE_2,
+            )
+            new_query = sdk.create_query(models.WriteQuery(
+                model=NEW_MODEL,
+                view=target_explore,
+                fields=remapped_fields,
+                filters=remapped_filters,
+                sorts=remap_sorts(q.sorts),
+                limit=q.limit,
+                dynamic_fields=remap_dynamic_fields(q.dynamic_fields),
+                pivots=remap_fields(q.pivots),
+                vis_config=remap_vis_config(vc),
+                total=q.total,
+                row_total=q.row_total,
+                filter_config=None,
+            ))
+            query_id = new_query.id
+        else:
+            query_id = None
+
         new_el = sdk.create_dashboard_element(models.WriteDashboardElement(
             dashboard_id=str(dest_id),
-            query_id=el.query_id,
+            query_id=query_id,
             title=el.title,
             title_hidden=el.title_hidden,
             subtitle_text=el.subtitle_text,
@@ -1080,9 +1107,20 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id, dry_run):
         print(f"  tile: {el.title}")
 
         if el.result_maker and el.result_maker.filterables:
+            remapped_filterables = [
+                models.ResultMakerFilterables(
+                    model=f.model, view=f.view, name=f.name,
+                    listen=[
+                        models.ResultMakerFilterablesListen(
+                            dashboard_filter_name=l.dashboard_filter_name,
+                            field=FIELD_MAP.get(l.field, l.field),
+                        ) for l in (f.listen or [])
+                    ]
+                ) for f in el.result_maker.filterables
+            ]
             sdk.update_dashboard_element(str(new_el.id), models.WriteDashboardElement(
                 result_maker=models.WriteResultMakerWithIdVisConfigAndDynamicFields(
-                    filterables=el.result_maker.filterables)
+                    filterables=remapped_filterables)
             ))
 
         if dst_layout_id and el.id in src_pos:
@@ -1100,259 +1138,14 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id, dry_run):
                     ))
                 print(f"  positioned: {el.title}")
 
-        
-# ─────────────────────────────────────────────
-# STEP 1b: Copy vis_config from source
-# ─────────────────────────────────────────────
-def copy_vis_config_from_source(sdk, source_id, dest_id, dry_run):
-    print(f"\n=== Step 1b: Copy vis_config from source dashboard {source_id} ===")
-    # Cache explore fields once for WILL BREAK checks (both explores)
-    try:
-        _explore_fields = set()
-        for _explore_name in (NEW_EXPLORE, NEW_EXPLORE_2):
-            _exp = sdk.lookml_model_explore(NEW_MODEL, _explore_name, fields="fields")
-            for _f in (_exp.fields.dimensions or []):
-                _explore_fields.add(_f.name)
-            for _f in (_exp.fields.measures or []):
-                _explore_fields.add(_f.name)
-    except Exception:
-        _explore_fields = set()
 
-    source_elements = sdk.dashboard_dashboard_elements(source_id, fields="id,title,query_id,result_maker,row,col")
-    dest_elements   = sdk.dashboard_dashboard_elements(dest_id, fields="id,title,query_id,result_maker,row,col")
-
-    source_by_title    = {}
-    source_by_position = {}
-    for el in source_elements:
-        vc, loc = extract_vis_config(el)
-        if not vc:
-            continue
-        title_key = (el.title or "").strip().lower()
-        if title_key:
-            source_by_title[title_key] = (vc, loc, el)
-        else:
-            source_by_position[(el.row, el.col)] = (vc, loc, el)
-
-    print(f"  Found vis_config for {len(source_by_title) + len(source_by_position)} tiles in source")
-
-    for el in dest_elements:
-        if not el.query_id:
-            continue
-        title_key = (el.title or "").strip().lower()
-
-        # Match by title first, then fall back to position for untitled tiles
-        if title_key and title_key in source_by_title:
-            vc, loc, src_el = source_by_title[title_key]
-        elif not title_key and (el.row, el.col) in source_by_position:
-            vc, loc, src_el = source_by_position[(el.row, el.col)]
-        else:
-            print(f"  ⚠️  '{el.title}' — no matching tile in source")
-            continue
-        src_total = src_row_total = None
-        if src_el.query_id:
-            src_q = sdk.query(str(src_el.query_id))
-            src_total     = src_q.total
-            src_row_total = src_q.row_total
-
-        if dry_run:
-            src_q = sdk.query(str(src_el.query_id)) if src_el.query_id else None
-            if src_q:
-                for f in (src_q.fields or []):
-                    if is_problem_field(f):
-                        print(f"  ❌ WILL BREAK '{el.title}' — field not in new explore: {f}")
-                for f in (src_q.filters or {}).keys():
-                    if is_problem_field(f):
-                        print(f"  ❌ WILL BREAK '{el.title}' — filter not in new explore: {f}")
-                if src_q.dynamic_fields:
-                    try:
-                        for d in json.loads(src_q.dynamic_fields):
-                            label = d.get("label") or d.get("table_calculation") or "(unnamed)"
-                            based_on = d.get("based_on", "")
-                            if based_on:
-                                if is_problem_field(based_on):
-                                    print(f"  ❌ WILL BREAK '{el.title}' — dynamic field '{label}' based_on not in new explore: {based_on}")
-                                elif based_on in FIELD_MAP and FIELD_MAP[based_on] not in _explore_fields:
-                                    print(f"  ❌ WILL BREAK '{el.title}' — dynamic field '{label}' maps to missing field: {based_on} → {FIELD_MAP[based_on]}")
-                    except Exception:
-                        pass
-            print(f"  [DRY RUN] Would copy {vc.get('type')} → '{el.title}' (total={src_total})")
-            continue
-
-        existing_query = sdk.query(str(el.query_id))
-        new_query = sdk.create_query(
-            models.WriteQuery(
-                model=existing_query.model,
-                view=existing_query.view,
-                fields=existing_query.fields,
-                filters=existing_query.filters,
-                sorts=existing_query.sorts,
-                limit=existing_query.limit,
-                dynamic_fields=existing_query.dynamic_fields,
-                pivots=existing_query.pivots,
-                vis_config=remap_vis_config(vc),
-                total=src_total,
-                row_total=src_row_total,
-                filter_config=None,  # must be null per API docs to avoid unexpected filtering
-            )
-        )
-        sdk.update_dashboard_element(
-            str(el.id),
-            models.WriteDashboardElement(query_id=new_query.id)
-        )
-        print(f"  ✅ '{el.title}' — copied {vc.get('type')} (total={src_total})")
 
 
 # ─────────────────────────────────────────────
-# STEP 2: Fix dashboard filters
-# ─────────────────────────────────────────────
-def fix_dashboard_filters(sdk, dest_id, dry_run):
-    print("\n=== Step 2: Fix dashboard filters ===")
-    dashboard = sdk.dashboard(dest_id)
-    for f in (dashboard.dashboard_filters or []):
-        if f.dimension in FIELD_MAP:
-            new_field = FIELD_MAP[f.dimension]
-            if dry_run:
-                print(f"  [DRY RUN] Would update '{f.title}': {f.dimension} → {new_field}, explore → {NEW_EXPLORE}")
-            else:
-                sdk.update_dashboard_filter(
-                    str(f.id),
-                    models.WriteDashboardFilter(dimension=new_field, explore=NEW_EXPLORE)
-                )
-                print(f"  ✓ Updated '{f.title}': {f.dimension} → {new_field}, explore → {NEW_EXPLORE}")
-        else:
-            print(f"  OK '{f.title}': {f.dimension} (explore: {f.explore})")
-
-
-# ─────────────────────────────────────────────
-# STEP 3: Swap explore + remap fields
-# ─────────────────────────────────────────────
-def swap_and_fix_tiles(sdk, dest_id, dry_run):
-    print("\n=== Step 3: Swap explore + remap fields ===")
-    elements = sdk.dashboard_dashboard_elements(dest_id)
-    for el in elements:
-        if not el.query_id:
-            continue
-        q = sdk.query(str(el.query_id))
-        if q.view != OLD_EXPLORE:
-            print(f"'{el.title}' — already on: {q.view}")
-        vc, _ = extract_vis_config(el, q)
-        remapped_fields  = remap_fields(q.fields, el.title)
-        remapped_filters = remap_filters(q.filters, el.title)
-        remapped_sorts   = remap_sorts(q.sorts)
-        target_explore = route_explore(
-            list(remapped_fields or []) + list((remapped_filters or {}).keys()),
-            _EXCLUSIVE_1, _EXCLUSIVE_2,
-        )
-        if dry_run:
-            for s in (q.sorts or []):
-                if is_problem_field(s.split(" ")[0]):
-                    print(f"  ⚠️  WILL BREAK '{el.title}' — sort not available in new explore: {s}")
-            print(f"  [DRY RUN] Would swap '{el.title}' → {target_explore}")
-            continue
-        new_query = sdk.create_query(
-            models.WriteQuery(
-                model=NEW_MODEL,
-                view=target_explore,
-                fields=remapped_fields,
-                filters=remapped_filters,
-                sorts=remapped_sorts,
-                limit=q.limit,
-                dynamic_fields=remap_dynamic_fields(q.dynamic_fields),
-                pivots=remap_fields(q.pivots),
-                vis_config=vc,
-                total=q.total,
-                row_total=q.row_total,
-                filter_config=None,  # must be null per API docs
-            )
-        )
-        sdk.update_dashboard_element(
-            str(el.id),
-            models.WriteDashboardElement(query_id=new_query.id)
-        )
-        print(f"  ✅ Swapped '{el.title}'")
-
-
-# ─────────────────────────────────────────────
-# STEP 4: Reconnect dashboard filters to tiles
-# Copies filter listen mappings from source, remapping old fields to new
-# ─────────────────────────────────────────────
-def reconnect_dashboard_filters(sdk, source_id, dest_id, dry_run):
-    print("\n=== Step 4: Reconnect dashboard filters to tiles ===")
-
-    source_elements = sdk.dashboard_dashboard_elements(source_id)
-    dest_elements   = sdk.dashboard_dashboard_elements(dest_id)
-
-    # Build lookup of source filterables by title
-    source_filterables = {}
-    for el in source_elements:
-        if not el.result_maker:
-            continue
-        title_key = (el.title or "").strip().lower()
-        if title_key:
-            source_filterables[title_key] = el.result_maker.filterables or []
-
-    for el in dest_elements:
-        if not el.query_id or not el.result_maker:
-            continue
-
-        title_key = (el.title or "").strip().lower()
-        if title_key not in source_filterables:
-            continue
-
-        src_filterables = source_filterables[title_key]
-        if not src_filterables:
-            continue
-
-        # Remap old field names to new ones in the listen mappings
-        needs_update = False
-        new_filterables = []
-        for filterable in src_filterables:
-            new_listens = []
-            for listen in (filterable.listen or []):
-                old_field = listen.field
-                new_field = FIELD_MAP.get(old_field, old_field)
-                if new_field != old_field:
-                    needs_update = True
-                    print(f"  ⚠️  '{el.title}': remapping filter '{listen.dashboard_filter_name}' {old_field} → {new_field}")
-                new_listens.append(
-                    models.ResultMakerFilterablesListen(
-                        dashboard_filter_name=listen.dashboard_filter_name,
-                        field=new_field
-                    )
-                )
-            new_filterables.append(
-                models.ResultMakerFilterables(
-                    model=filterable.model,
-                    view=filterable.view,
-                    name=filterable.name,
-                    listen=new_listens
-                )
-            )
-
-        if not needs_update:
-            print(f"  OK '{el.title}' — filter mappings already correct")
-            continue
-
-        if dry_run:
-            print(f"  [DRY RUN] Would remap filter fields for '{el.title}'")
-            continue
-
-        sdk.update_dashboard_element(
-            str(el.id),
-            models.WriteDashboardElement(
-                result_maker=models.WriteResultMakerWithIdVisConfigAndDynamicFields(
-                    filterables=new_filterables
-                )
-            )
-        )
-        print(f"  ✅ '{el.title}' — filter fields remapped")
-
-
-# ─────────────────────────────────────────────
-# STEP 5: Verify
+# STEP 3: Verify
 # ─────────────────────────────────────────────
 def verify(sdk, dest_id):
-    print("\n=== Step 5: Verify ===")
+    print("\n=== Step 3: Verify ===")
     elements = sdk.dashboard_dashboard_elements(dest_id)
     issues = []
     dashboard = sdk.dashboard(dest_id)
@@ -1430,11 +1223,6 @@ if __name__ == "__main__":
         sdk.update_git_branch(project_id=NEW_MODEL, body=models.WriteGitBranch(name="v2-migration"))
     except Exception as e:
         print(f"⚠️  Could not switch to v2-migration branch (proceeding on current branch): {e}")
-
-    # --check-tiles runs in dev so it sees fields on the migration branch
-    if args.check_tiles:
-        ok = check_tiles(sdk, args.source)
-        sys.exit(0 if ok else 1)
 
     # Load both explore view sets for routing and is_problem_field
     try:
@@ -1551,7 +1339,5 @@ if __name__ == "__main__":
     # full migration (dry-run or live)
     snapshot(sdk, dest_id, dry_run)
     delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id, dry_run)
-    fix_dashboard_filters(sdk, dest_id, dry_run)
-    reconnect_dashboard_filters(sdk, source_id, dest_id, dry_run)
     verify(sdk, dest_id)
     print(f"\n✓ Done — snapshot saved to snapshot_{dest_id}.json")

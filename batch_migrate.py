@@ -71,13 +71,13 @@ def get_or_create_dest(sdk, source_id, tracker_body, dry_run):
     folder_id = str(source.folder_id)
 
     if dry_run:
-        print(f"  [DRY RUN] Would copy dashboard {source_id} into folder {folder_id}")
+        print(f"  [DRY RUN] Would create blank dashboard in folder {folder_id}")
         return source_id  # use source as a read-only proxy
 
-    copied = sdk.copy_dashboard(source_id, folder_id=folder_id)
-    dest_id = str(copied.id)
-    sdk.update_dashboard(dest_id, models.WriteDashboard(title=f"[migrated] {copied.title}"))
-    print(f"  Created copy: '[migrated] {copied.title}' (dashboard {dest_id})")
+    title = f"[migrated] {source.title or source_id}"
+    created = sdk.create_dashboard(models.WriteDashboard(title=title, folder_id=folder_id))
+    dest_id = str(created.id)
+    print(f"  Created blank: '{title}' (dashboard {dest_id})")
     return dest_id
 
 
