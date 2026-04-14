@@ -1291,8 +1291,7 @@ def swap_and_fix_tiles(sdk, dest_id, dry_run):
             continue
         q = sdk.query(str(el.query_id))
         if q.view != OLD_EXPLORE:
-            print(f"  Skipping '{el.title}' — already on: {q.view}")
-            continue
+            print(f"'{el.title}' — already on: {q.view}")
         vc, _ = extract_vis_config(el, q)
         remapped_fields  = remap_fields(q.fields, el.title)
         remapped_filters = remap_filters(q.filters, el.title)
