@@ -270,6 +270,7 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
 
     # ── 3. Recreate elements (with remapping), link filters, restore positions ─
     broken_summary = {}  # tile_title -> [broken_field, ...]
+    src_to_dest = {}     # source element_id -> dest element_id (for layout update)
     for el in source_elements:
         field_map = {}  # default: no remapping (used by filterable section below)
         if el.query_id:
@@ -340,13 +341,18 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
             ))
 
         if dst_layout_id and el.id in src_pos:
-            c = src_pos[el.id]
-            fresh_comps = {x.dashboard_element_id: x for x in (sdk.dashboard_layout(dst_layout_id).dashboard_layout_components or [])}
-            if new_el.id in fresh_comps:
-                sdk.update_dashboard_layout_component(str(fresh_comps[new_el.id].id),
+            src_to_dest[el.id] = new_el.id
+
+    # Update all positions in a single layout fetch
+    if dst_layout_id and src_to_dest:
+        dest_comps = {x.dashboard_element_id: x for x in (sdk.dashboard_layout(dst_layout_id).dashboard_layout_components or [])}
+        for src_el_id, dest_el_id in src_to_dest.items():
+            if dest_el_id in dest_comps:
+                c = src_pos[src_el_id]
+                sdk.update_dashboard_layout_component(str(dest_comps[dest_el_id].id),
                     models.WriteDashboardLayoutComponent(
                         dashboard_layout_id=dst_layout_id,
-                        dashboard_element_id=str(new_el.id),
+                        dashboard_element_id=str(dest_el_id),
                         row=c.row,
                         column=c.column,
                         width=c.width,

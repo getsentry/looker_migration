@@ -18,7 +18,9 @@ from bs4 import BeautifulSoup
 
 # Migration tracker dashboard element (dashboard 2145)
 LOG_ELEMENT_ID = "29861"
-LOG_ROW_STYLE  = "border: 1px solid #dddddd; padding: 12px;"
+TABLE_STYLE    = "border-collapse: collapse; width: 100%; font-family: Roboto;"
+HEADER_STYLE   = "border: 1px solid #dddddd; text-align: left; padding: 12px;"
+LOG_ROW_STYLE  = "border: 1px solid #dddddd; text-align: left; padding: 12px;"
 BASE_URL       = "https://sentryio.cloud.looker.com/dashboards"
 
 
@@ -35,12 +37,39 @@ def get_dest_from_tracker(body, source_id):
     return None
 
 
-def upsert_tracker(sdk, source_id, dest_id, dashboard_name, status):
+def upsert_tracker(sdk, source_id, dest_id, dashboard_name, status, total_tiles="", broken_tiles=""):
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     current = get_tracker_body(sdk)
     if not current.strip():
-        current = "<table><tbody></tbody></table>"
+        current = (
+            f'<table style="{TABLE_STYLE}">'
+            f'<thead><tr style="background-color: #f2f2f2;">'
+            f'<th style="{HEADER_STYLE}">Source ID</th>'
+            f'<th style="{HEADER_STYLE}">Dest ID</th>'
+            f'<th style="{HEADER_STYLE}">Dashboard Name</th>'
+            f'<th style="{HEADER_STYLE}">Timestamp</th>'
+            f'<th style="{HEADER_STYLE}">Status</th>'
+            f'<th style="{HEADER_STYLE}">Total Tiles</th>'
+            f'<th style="{HEADER_STYLE}">Broken Tiles</th>'
+            f'</tr></thead>'
+            f'<tbody></tbody>'
+            f'</table>'
+        )
     soup = BeautifulSoup(current, "html.parser")
+
+    # Ensure table and thead have correct styles and new columns
+    table = soup.find("table")
+    if table and not table.get("style"):
+        table["style"] = TABLE_STYLE
+    thead_row = soup.find("thead").find("tr") if soup.find("thead") else None
+    if thead_row:
+        if not thead_row.get("style"):
+            thead_row["style"] = "background-color: #f2f2f2;"
+        existing_headers = [th.get_text(strip=True) for th in thead_row.find_all("th")]
+        for header in ("Total Tiles", "Broken Tiles"):
+            if header not in existing_headers:
+                new_th = BeautifulSoup(f'<th style="{HEADER_STYLE}">{header}</th>', "html.parser").find("th")
+                thead_row.append(new_th)
 
     new_row = BeautifulSoup(
         f'<tr>'
@@ -49,6 +78,8 @@ def upsert_tracker(sdk, source_id, dest_id, dashboard_name, status):
         f'<td style="{LOG_ROW_STYLE}">{dashboard_name}</td>'
         f'<td style="{LOG_ROW_STYLE}">{timestamp}</td>'
         f'<td style="{LOG_ROW_STYLE}">{status}</td>'
+        f'<td style="{LOG_ROW_STYLE}">{total_tiles}</td>'
+        f'<td style="{LOG_ROW_STYLE}">{broken_tiles}</td>'
         f'</tr>',
         "html.parser",
     ).find("tr")
@@ -108,15 +139,22 @@ def main():
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         print(result.stdout, end="")
 
-        pct_match = re.search(r"(\d+)/(\d+) tiles migrated cleanly \((\d+)%\)", result.stdout)
+        pct_match    = re.search(r"(\d+)/(\d+) tiles migrated cleanly \((\d+)%\)", result.stdout)
+        total_match  = re.search(r"(\d+) with queries", result.stdout)
+        broken_match = re.search(r"(\d+) tile\(s\) with unmapped fields", result.stdout)
+
         if pct_match:
             status = f"migrated ({pct_match.group(3)}%)"
         elif result.returncode != 0:
             status = "script failure"
         else:
             status = "migrated"
+
+        total_tiles  = total_match.group(1)  if total_match  else ""
+        broken_tiles = broken_match.group(1) if broken_match else "0" if total_match else ""
+
         dashboard_name = sdk.dashboard(dest_id).title or ""
-        upsert_tracker(sdk, source_id, dest_id, dashboard_name, status)
+        upsert_tracker(sdk, source_id, dest_id, dashboard_name, status, total_tiles, broken_tiles)
 
 
 if __name__ == "__main__":
