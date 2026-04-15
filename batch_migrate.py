@@ -14,6 +14,7 @@ import sys
 from datetime import datetime, timezone
 import looker_sdk
 from looker_sdk import models40 as models
+from bs4 import BeautifulSoup
 
 # Migration tracker dashboard element (dashboard 2145)
 LOG_ELEMENT_ID = "29861"
@@ -26,35 +27,45 @@ def get_tracker_body(sdk):
 
 
 def get_dest_from_tracker(body, source_id):
-    match = re.search(
-        rf'<td[^>]*>(?:<a[^>]*>)?\s*{re.escape(source_id)}\s*(?:</a>)?</td>'
-        rf'\s*<td[^>]*>(?:<a[^>]*>)?\s*(\d+)\s*(?:</a>)?</td>',
-        body,
-    )
-    return match.group(1) if match else None
+    soup = BeautifulSoup(body, "html.parser")
+    for row in soup.find_all("tr"):
+        cells = row.find_all("td")
+        if cells and cells[0].get_text(strip=True) == source_id:
+            return cells[1].get_text(strip=True) if len(cells) > 1 else None
+    return None
 
 
 def upsert_tracker(sdk, source_id, dest_id, dashboard_name, status):
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    new_row = (
-        f'    <tr>'
+    current = get_tracker_body(sdk)
+    if not current.strip():
+        current = "<table><tbody></tbody></table>"
+    soup = BeautifulSoup(current, "html.parser")
+
+    new_row = BeautifulSoup(
+        f'<tr>'
         f'<td style="{LOG_ROW_STYLE}"><a href="{BASE_URL}/{source_id}">{source_id}</a></td>'
         f'<td style="{LOG_ROW_STYLE}"><a href="{BASE_URL}/{dest_id}">{dest_id}</a></td>'
         f'<td style="{LOG_ROW_STYLE}">{dashboard_name}</td>'
         f'<td style="{LOG_ROW_STYLE}">{timestamp}</td>'
         f'<td style="{LOG_ROW_STYLE}">{status}</td>'
-        f'</tr>'
-    )
-    current = get_tracker_body(sdk)
-    row_pattern = rf'<tr>\s*<td[^>]*>(?:<a[^>]*>)?\s*{re.escape(source_id)}\s*(?:</a>)?</td>.*?</tr>'
-    if re.search(row_pattern, current, flags=re.DOTALL):
-        updated = re.sub(row_pattern, new_row, current, flags=re.DOTALL)
-    elif "</tbody>" in current:
-        updated = current.replace("</tbody>", new_row + "\n  </tbody>")
-    else:
-        updated = current + "\n" + new_row
+        f'</tr>',
+        "html.parser",
+    ).find("tr")
 
-    sdk.update_dashboard_element(LOG_ELEMENT_ID, models.WriteDashboardElement(body_text=updated))
+    existing = next(
+        (row for row in soup.find_all("tr")
+         if row.find_all("td") and row.find_all("td")[0].get_text(strip=True) == source_id),
+        None,
+    )
+    if existing:
+        existing.replace_with(new_row)
+    elif soup.find("tbody"):
+        soup.find("tbody").append(new_row)
+    else:
+        soup.append(new_row)
+
+    sdk.update_dashboard_element(LOG_ELEMENT_ID, models.WriteDashboardElement(body_text=str(soup)))
     print(f"  ✅ Tracker updated: {source_id} → {dest_id} ({status})")
 
 
@@ -76,6 +87,7 @@ def main():
     p = argparse.ArgumentParser(description="Batch Looker dashboard migration")
     p.add_argument("sources", nargs="+", help="Source dashboard IDs to migrate")
     p.add_argument("--ini", default="looker.ini", help="Path to looker.ini")
+    p.add_argument("--explore-from", nargs="+", default=None, metavar="EXPLORE", help="Old explore name(s) to remap (forwarded to run_migration.py)")
     args = p.parse_args()
 
     sdk = looker_sdk.init40(config_file=args.ini)
@@ -90,10 +102,19 @@ def main():
 
         cmd = [sys.executable, "run_migration.py",
                "--source", source_id, "--dest", dest_id, "--ini", args.ini]
+        if args.explore_from:
+            cmd += ["--explore-from"] + args.explore_from
 
-        result = subprocess.run(cmd)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        print(result.stdout, end="")
 
-        status = "migrated" if result.returncode == 0 else "migrated with errors"
+        pct_match = re.search(r"(\d+)/(\d+) tiles migrated cleanly \((\d+)%\)", result.stdout)
+        if pct_match:
+            status = f"migrated ({pct_match.group(3)}%)"
+        elif result.returncode != 0:
+            status = "script failure"
+        else:
+            status = "migrated"
         dashboard_name = sdk.dashboard(dest_id).title or ""
         upsert_tracker(sdk, source_id, dest_id, dashboard_name, status)
 

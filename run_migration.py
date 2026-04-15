@@ -5,8 +5,7 @@ Migrates dashboard tiles from an old explore to a new one,
 copying vis_config, totals, and fixing filters.
 
 USAGE:
-  python3 run_migration.py --source 1722 --dest 2137 --dry-run
-  python3 run_migration.py --source 1722 --dest 2137 --validate
+  python3 run_migration.py --source 1722 --dest 2137 --check
   python3 run_migration.py --source 1722 --dest 2137
 
 CREDENTIALS:
@@ -26,8 +25,8 @@ import re
 import sys
 import looker_sdk
 from looker_sdk import models40 as models
-from mappings import OLD_EXPLORE, NEW_MODEL, NEW_EXPLORE, NEW_EXPLORE_2, JOINED_VIEWS_IN_NEW_EXPLORE, FIELD_MAPS, FIELD_MAP
-from checks import check, batch_check
+from mappings import OLD_EXPLORE, NEW_MODEL, JOINED_VIEWS_IN_NEW_EXPLORE, FIELD_MAPS, FIELD_MAP
+from checks import check, batch_check  # check used by --check / --batch paths
 
 
 # ─────────────────────────────────────────────
@@ -39,15 +38,11 @@ def parse_args():
     p.add_argument("--batch",         nargs="+", metavar="ID", help="Validate multiple source dashboard IDs (or SOURCE:DEST pairs)")
     p.add_argument("--dest",          required=False, default=None, help="Destination dashboard ID (copy TO)")
     p.add_argument("--check",         action="store_true", help="Check source dashboard fields against the destination explore (API-based, grouped by tile)")
-    p.add_argument("--check-tiles",   action="store_true", help="Check source dashboard fields tile-by-tile, mapped fields first, including dynamic field expressions")
-    p.add_argument("--validate",      action="store_true", help="[deprecated] Alias for --check")
-    p.add_argument("--check-explore", action="store_true", help="[deprecated] Alias for --check")
-    p.add_argument("--audit",         action="store_true", help="[deprecated] Alias for --check")
     p.add_argument("--ini",           default="looker.ini", help="Path to looker.ini (default: ./looker.ini)")
     p.add_argument("--production",    action="store_true", help="Run against production (skip dev session and git branch switch)")
-    p.add_argument("--explore-from",  default="product_facts", help="Old explore name (default: product_facts)")
+    p.add_argument("--explore-from",  nargs="+", default=["product_facts"], metavar="EXPLORE", help="Old explore name(s) (default: product_facts)")
     p.add_argument("--explore-to",    default="product_usage_org_proj", help="New explore name (default: product_usage_org_proj)")
-    p.add_argument("--model",         default="super_big_facts", help="New model name (default: super_big_facts)")
+    p.add_argument("--model",          default="super_big_facts", help="New model name (default: super_big_facts)")
     return p.parse_args()
 
 
@@ -69,25 +64,20 @@ def extract_vis_config(element, query=None):
             return vc, "query.vis_config"
     return None, "not found"
 
-def remap_fields(fields, field_map, tile_title=None):
+def remap_fields(fields, field_map):
     if not fields:
         return fields
-    result = []
-    for f in fields:
-        if is_problem_field(f, field_map):
-            print(f"  ⚠️  WILL BREAK '{tile_title}' — field not available in new explore: {f}")
-        result.append(field_map.get(f, f))
-    return result
+    return [field_map.get(f, f) for f in fields]
 
-def remap_filters(filters, field_map, tile_title=None):
+def remap_filters(filters, field_map):
     if not filters:
         return filters
-    result = {}
-    for k, v in filters.items():
-        if is_problem_field(k, field_map):
-            print(f"  ⚠️  WILL BREAK '{tile_title}' — filter not available in new explore: {k}")
-        result[field_map.get(k, k)] = v
-    return result
+    return {field_map.get(k, k): v for k, v in filters.items()}
+
+def broken_fields(fields, filters, field_map, target_explore=None):
+    """Return list of fields/filter-keys that won't exist in the target explore."""
+    candidates = list(fields or []) + list((filters or {}).keys())
+    return [f for f in candidates if is_problem_field(f, field_map, target_explore)]
 
 def remap_sorts(sorts, field_map):
     if not sorts:
@@ -146,63 +136,61 @@ def remap_dynamic_fields(dynamic_fields_str, field_map):
 
 # Populated at runtime after SDK is initialized and dev mode is set
 _EXPLORE_VIEWS = set()
-_EXCLUSIVE_1 = set()   # views only in NEW_EXPLORE
-_EXCLUSIVE_2 = set()   # views only in NEW_EXPLORE_2
+_EXPLORE_VIEW_SETS = {}   # explore_name -> set of view names
+_EXPLORE_FIELD_SETS = {}  # explore_name -> set of field names (view.field)
 
 
 def build_explore_view_sets(sdk):
-    """Fetch both explores from the API and return their view sets.
+    """Fetch view and field sets for all new explores referenced in FIELD_MAPS.
 
-    Returns:
-        (views1, views2, exclusive1, exclusive2) where exclusive1/exclusive2
-        are the views that appear in only one explore.
+    Returns (view_sets, field_sets) where each maps explore_name -> set.
     """
-    def _views(exp):
+    new_explores = {new_exp for (_, new_exp) in FIELD_MAPS}
+    view_sets = {}
+    field_sets = {}
+    for explore_name in new_explores:
+        exp = sdk.lookml_model_explore(NEW_MODEL, explore_name, fields="fields")
         fields = (exp.fields.dimensions or []) + (exp.fields.measures or [])
-        return {f.name.split(".")[0] for f in fields}
-
-    exp1 = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE, fields="fields")
-    exp2 = sdk.lookml_model_explore(NEW_MODEL, NEW_EXPLORE_2, fields="fields")
-    views1 = _views(exp1)
-    views2 = _views(exp2)
-    return views1, views2, views1 - views2, views2 - views1
+        view_sets[explore_name] = {f.name.split(".")[0] for f in fields}
+        field_sets[explore_name] = {f.name for f in fields}
+    return view_sets, field_sets
 
 
-def route_explore(fields, exclusive1, exclusive2):
-    """Pick the right explore for a tile based on its fields.
+def route_explore(source_explore, fields, explore_view_sets):
+    """Pick the right new explore for a tile given its source explore and fields.
 
-    Scans fields for the first view that appears exclusively in one explore.
-    Falls back to NEW_EXPLORE if no exclusive view is found, and logs a warning
-    since those tiles reference only shared views — the fallback may be wrong.
+    Derives candidate new explores from FIELD_MAPS. If only one candidate exists,
+    returns it immediately. Otherwise scans fields for the first view that appears
+    exclusively in one candidate explore.
     """
+    candidates = [new_exp for (old, new_exp) in FIELD_MAPS if old == source_explore]
+    if not candidates:
+        raise ValueError(f"No FIELD_MAPS entry for source explore: {source_explore}")
+    if len(candidates) == 1:
+        return candidates[0]
     for f in (fields or []):
         if "." not in f:
             continue
         view = f.split(".")[0]
-        if view in exclusive2:
-            print(f"  {NEW_EXPLORE_2} selected")
-            return NEW_EXPLORE_2
-        if view in exclusive1:
-            print(f"  {NEW_EXPLORE} selected")
-            return NEW_EXPLORE
-    print(f"  defaulting to {NEW_EXPLORE}")
-    return NEW_EXPLORE
+        for candidate in candidates:
+            other_views = set().union(*(explore_view_sets.get(c, set()) for c in candidates if c != candidate))
+            if view in explore_view_sets.get(candidate, set()) and view not in other_views:
+                return candidate
+    return candidates[0]
 
-def is_problem_field(field, field_map):
-    """Returns True if a field needs to be flagged — it's from OLD_EXPLORE and unmapped,
-    or from a view that isn't in the new explore (checked via API if available)."""
+def is_problem_field(field, field_map, target_explore=None):
+    """Returns True if a field will be unavailable in the target explore after remapping."""
     if not field or "." not in field:
         return False
-    view = field.split(".")[0]
     if field in field_map:
         return False  # explicitly remapped, fine
-    if view == OLD_EXPLORE:
-        return True   # from old explore and not remapped
-    # Use API-loaded explore fields if available
+    # Check against the specific routed explore's field set if available
+    if target_explore and _EXPLORE_FIELD_SETS:
+        return field not in _EXPLORE_FIELD_SETS.get(target_explore, set())
+    # Fall back to union of all explore views
     if _EXPLORE_VIEWS:
-        return view not in _EXPLORE_VIEWS
-    # Fallback to hardcoded set
-    return view not in JOINED_VIEWS_IN_NEW_EXPLORE
+        return field.split(".")[0] not in _EXPLORE_VIEWS
+    return field.split(".")[0] not in JOINED_VIEWS_IN_NEW_EXPLORE
 
 
 
@@ -212,7 +200,6 @@ def is_problem_field(field, field_map):
 # STEP 1: Snapshot
 # ─────────────────────────────────────────────
 def snapshot(sdk, dest_id):
-    print(f"\n=== Step 1: Snapshot dashboard {dest_id} ===")
     elements = sdk.dashboard_dashboard_elements(dest_id)
     snapshot_data = []
     for el in elements:
@@ -220,10 +207,6 @@ def snapshot(sdk, dest_id):
             continue
         q = sdk.query(str(el.query_id))
         vc, loc = extract_vis_config(el, q)
-        if not vc:
-            print(f"  ⚠️  '{el.title}' — vis_config not found")
-        else:
-            print(f"  ✅ '{el.title}' — {vc.get('type')} at {loc}")
         snapshot_data.append({
             "element_id": el.id,
             "title": el.title,
@@ -249,8 +232,6 @@ def snapshot(sdk, dest_id):
 # STEP 2: Delete tiles and copy source dashboard
 # ─────────────────────────────────────────────
 def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
-    print(f"\n=== Step 2: Delete dest tiles and copy from source {source_id} ===")
-
     dest_elements    = sdk.dashboard_dashboard_elements(dest_id)
     source_elements  = sdk.dashboard_dashboard_elements(source_id)
     source_dashboard = sdk.dashboard(source_id)
@@ -281,7 +262,6 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
                 ui_config=f.ui_config,
             )
         )
-        print(f"  filter: {f.title}")
 
     # Build source position map and get dest layout ID before the loop
     src_layout   = next((l for l in sdk.dashboard_dashboard_layouts(str(source_id)) if getattr(l, "active", False)), None)
@@ -289,39 +269,48 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
     dst_layout_id = next((str(l.id) for l in sdk.dashboard_dashboard_layouts(str(dest_id)) if getattr(l, "active", False)), None)
 
     # ── 3. Recreate elements (with remapping), link filters, restore positions ─
+    broken_summary = {}  # tile_title -> [broken_field, ...]
     for el in source_elements:
+        field_map = {}  # default: no remapping (used by filterable section below)
         if el.query_id:
             q = sdk.query(str(el.query_id))
             vc, _ = extract_vis_config(el, q)
-            # Route on source fields first so we can select the right field map
-            target_explore = route_explore(
-                list(q.fields or []) + list((q.filters or {}).keys()),
-                _EXCLUSIVE_1, _EXCLUSIVE_2,
-            )
-            field_map = FIELD_MAPS.get((OLD_EXPLORE, target_explore), FIELD_MAP)
-            remapped_fields  = remap_fields(q.fields, field_map, el.title)
-            remapped_filters = remap_filters(q.filters, field_map, el.title)
-            new_query = sdk.create_query(models.WriteQuery(
-                model=NEW_MODEL,
-                view=target_explore,
-                fields=remapped_fields,
-                filters=remapped_filters,
-                sorts=remap_sorts(q.sorts, field_map),
-                limit=q.limit,
-                dynamic_fields=remap_dynamic_fields(q.dynamic_fields, field_map),
-                pivots=remap_fields(q.pivots, field_map),
-                vis_config=remap_vis_config(vc, field_map),
-                total=q.total,
-                row_total=q.row_total,
-                filter_config=None,
-            ))
-            query_id = new_query.id
+            if q.view in OLD_EXPLORE:
+                # Route on source fields first so we can select the right field map
+                target_explore = route_explore(
+                    q.view,
+                    list(q.fields or []) + list((q.filters or {}).keys()),
+                    _EXPLORE_VIEW_SETS,
+                )
+                field_map = FIELD_MAPS.get((q.view, target_explore), FIELD_MAP)
+                bad = broken_fields(q.fields, q.filters, field_map, target_explore)
+                if bad:
+                    broken_summary[el.title or "(untitled)"] = bad
+                new_query = sdk.create_query(models.WriteQuery(
+                    model=NEW_MODEL,
+                    view=target_explore,
+                    fields=remap_fields(q.fields, field_map),
+                    filters=remap_filters(q.filters, field_map),
+                    sorts=remap_sorts(q.sorts, field_map),
+                    limit=q.limit,
+                    dynamic_fields=remap_dynamic_fields(q.dynamic_fields, field_map),
+                    pivots=remap_fields(q.pivots, field_map),
+                    vis_config=remap_vis_config(vc, field_map),
+                    total=q.total,
+                    row_total=q.row_total,
+                    filter_config=None,
+                ))
+                query_id = new_query.id
+            else:
+                query_id = el.query_id
         else:
             query_id = None
 
         new_el = sdk.create_dashboard_element(models.WriteDashboardElement(
             dashboard_id=str(dest_id),
             query_id=query_id,
+            look_id=el.look_id if query_id is None else None,
+            result_maker_id=el.result_maker_id if query_id is None else None,
             title=el.title,
             title_hidden=el.title_hidden,
             subtitle_text=el.subtitle_text,
@@ -332,7 +321,6 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
             type=el.type,
             rich_content_json=el.rich_content_json,
         ))
-        print(f"  tile: {el.title}")
 
         if el.result_maker and el.result_maker.filterables:
             remapped_filterables = [
@@ -365,50 +353,23 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
                         height=c.height,
                     ))
 
-
+    query_tile_count = sum(1 for el in source_elements if el.query_id)
+    print(f"✓ Rebuilt dashboard {dest_id} ({len(source_elements)} tiles, {query_tile_count} with queries)")
+    if broken_summary:
+        print(f"\n⚠️  {len(broken_summary)} tile(s) with unmapped fields:")
+        for title, fields in broken_summary.items():
+            print(f"  '{title}':")
+            for f in fields:
+                print(f"    {f}")
+    if query_tile_count:
+        clean = query_tile_count - len(broken_summary)
+        pct = 100 * clean // query_tile_count
+        print(f"\n  {clean}/{query_tile_count} tiles migrated cleanly ({pct}%)")
 
 
 # ─────────────────────────────────────────────
-# STEP 3: Verify
+# STEP 3: Verify — delegates to check()
 # ─────────────────────────────────────────────
-def verify(sdk, dest_id):
-    print("\n=== Step 3: Verify ===")
-    elements = sdk.dashboard_dashboard_elements(dest_id)
-    issues = []
-    dashboard = sdk.dashboard(dest_id)
-
-    for f in (dashboard.dashboard_filters or []):
-        if f.dimension and is_problem_field(f.dimension, FIELD_MAP):
-            issues.append(f"Dashboard filter '{f.title}': {f.dimension}")
-
-    for el in elements:
-        if not el.query_id:
-            continue
-        q = sdk.query(str(el.query_id))
-        field_map = FIELD_MAPS.get((OLD_EXPLORE, q.view), FIELD_MAP)
-        if q.view == OLD_EXPLORE:
-            issues.append(f"Tile '{el.title}' still on old explore")
-        if q.filters:
-            for field in q.filters:
-                if is_problem_field(field, field_map):
-                    issues.append(f"Tile '{el.title}' filter: {field}")
-        if q.sorts:
-            for sort in q.sorts:
-                field = sort.split(" ")[0]
-                if is_problem_field(field, field_map):
-                    issues.append(f"Tile '{el.title}' sort: {sort}")
-        vc, loc = extract_vis_config(el, q)
-        if not vc:
-            issues.append(f"Tile '{el.title}' missing vis_config — may show as Table (Legacy)")
-        else:
-            print(f"  ✅ '{el.title}' — {vc.get('type')} at {loc}")
-
-    if issues:
-        print("\n⚠️  Issues found:")
-        for i in issues:
-            print(f"  - {i}")
-    else:
-        print("\n✓ All clean")
 
 
 # ─────────────────────────────────────────────
@@ -435,7 +396,7 @@ if __name__ == "__main__":
     args = parse_args()
     sdk = looker_sdk.init40(config_file=args.ini)
 
-    OLD_EXPLORE = args.explore_from
+    OLD_EXPLORE = args.explore_from  # list of old explore names
     NEW_MODEL   = args.model
     NEW_EXPLORE = args.explore_to
 
@@ -446,16 +407,16 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"⚠️  Could not switch to v2-migration branch (proceeding on current branch): {e}")
 
-    if args.check or args.audit or args.validate or args.check_explore:
+    if args.check:
         ok = check(sdk, args.source)
         sys.exit(0 if ok else 1)
 
-    # Load both explore view sets for routing and is_problem_field
+    # Load explore view sets for routing and is_problem_field
     try:
-        _views1, _views2, _excl1, _excl2 = build_explore_view_sets(sdk)
-        _EXCLUSIVE_1.update(_excl1)
-        _EXCLUSIVE_2.update(_excl2)
-        _EXPLORE_VIEWS.update(_views1 | _views2)
+        _view_sets, _field_sets = build_explore_view_sets(sdk)
+        _EXPLORE_VIEW_SETS.update(_view_sets)
+        _EXPLORE_FIELD_SETS.update(_field_sets)
+        _EXPLORE_VIEWS.update(set().union(*_view_sets.values()))
     except Exception as _e:
         print(f"⚠️  Could not load explore fields: {_e}")
 
@@ -471,5 +432,4 @@ if __name__ == "__main__":
 
     snapshot(sdk, dest_id)
     delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id)
-    verify(sdk, dest_id)
     print(f"\n✓ Done — snapshot saved to snapshot_{dest_id}.json")

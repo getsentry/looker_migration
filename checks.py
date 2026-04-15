@@ -11,11 +11,11 @@ from collections import defaultdict
 
 from mappings import OLD_EXPLORE, NEW_MODEL, NEW_EXPLORE, NEW_EXPLORE_2, FIELD_MAPS
 
-# Combined field map across both destination explores
-_COMBINED_FIELD_MAP = {
-    **FIELD_MAPS.get((OLD_EXPLORE, NEW_EXPLORE), {}),
-    **FIELD_MAPS.get((OLD_EXPLORE, NEW_EXPLORE_2), {}),
-}
+# Combined field map across all old→new explore pairs
+_COMBINED_FIELD_MAP = {}
+for _old in OLD_EXPLORE:
+    for _new in (NEW_EXPLORE, NEW_EXPLORE_2):
+        _COMBINED_FIELD_MAP.update(FIELD_MAPS.get((_old, _new), {}))
 
 
 def check(sdk, source_id):
@@ -51,6 +51,8 @@ def check(sdk, source_id):
         if not el.query_id:
             continue
         q = sdk.query(str(el.query_id))
+        if q.view not in OLD_EXPLORE:
+            continue
         tile_title = el.title or "(untitled)"
 
         fields = set()
@@ -175,7 +177,7 @@ def batch_check(sdk, entries):
                 continue
             q = sdk.query(str(el.query_id))
             # Skip tiles not on the old explore
-            if q.model != NEW_MODEL or q.view != OLD_EXPLORE:
+            if q.view not in OLD_EXPLORE:
                 continue
             el_fields = set(q.fields or []) | set((q.filters or {}).keys())
             # Collect based_on fields from dynamic fields

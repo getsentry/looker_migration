@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────
 # EXPLORES — update for your migration
 # ─────────────────────────────────────────────
-OLD_EXPLORE  = "product_facts"
+OLD_EXPLORE  = ["product_facts"]
 NEW_MODEL    = "super_big_facts"
 NEW_EXPLORE  = "product_usage_org_proj"
 NEW_EXPLORE_2 = "product_usage_sdk"
@@ -640,7 +640,46 @@ FIELD_MAPS = {
     "user_details_for_analytics.is_staff": "user_details_for_analytics.is_staff",
     "user_details_for_analytics.is_superuser": "user_details_for_analytics.is_superuser",
 },
+("subscriptions_v3", "subscriptions_v3"): {
+    "billing_model.sum_total_new_arr":                                    "daily_arr_changes_org.sum_total_new_arr",
+    "billing_model.sum_total_churn_arr":                                  "daily_arr_changes_org.sum_total_churn_arr",
+    "billing_model.sum_total_reactivation_arr":                           "daily_arr_changes_org.sum_total_reactivation_arr",
+    "billing_model.sum_total_expansion_arr":                              "daily_arr_changes_org.sum_total_expansion_arr",
+    "billing_model.sum_total_contraction_arr":                            "daily_arr_changes_org.sum_total_contraction_arr",
+    "billing_model_billing_category.sum_new_arr":                         "daily_arr_changes_category.sum_total_new_arr",
+    "billing_model_billing_category.sum_churn_arr":                       "daily_arr_changes_category.sum_total_churn_arr",
+    "billing_model_billing_category.sum_reactivation_arr":                "daily_arr_changes_category.sum_total_reactivation_arr",
+    "billing_model_billing_category.sum_expansion_arr":                   "daily_arr_changes_category.sum_total_expansion_arr",
+    "billing_model_billing_category.sum_contraction_arr":                 "daily_arr_changes_category.sum_total_contraction_arr",
+    "daily_financial_data.total_change_in_ondemand_arr":                  "daily_arr_changes_org.ondemand_change_arr",
+    "daily_financial_data.is_net_churn":                                  "daily_arr_changes_org.is_net_churn",
+    "daily_financial_data.total_churn_arr":                               "daily_arr_changes_org.total_churn_arr",
+    "daily_financial_data.total_contraction_arr":                         "daily_arr_changes_org.total_contraction_arr",
+    "daily_financial_data.total_expansion_arr":                           "daily_arr_changes_org.total_expansion_arr",
+    "daily_financial_data.total_new_arr":                                 "daily_arr_changes_org.total_new_arr",
+    "daily_financial_data.total_reactivation_arr":                        "daily_arr_changes_org.total_reactivation_arr",
+    "daily_financial_data.total_churn_payg_arr":                          "daily_arr_changes_org.ondemand_churn_arr",
+    "daily_financial_data.total_contraction_payg_arr":                    "daily_arr_changes_org.ondemand_contraction_arr",
+    "daily_financial_data.total_expansion_payg_arr":                      "daily_arr_changes_org.ondemand_expansion_arr",
+    "daily_financial_data.total_new_payg_arr":                            "daily_arr_changes_org.ondemand_new_arr",
+    "daily_financial_data.total_reactivation_payg_arr":                   "daily_arr_changes_org.ondemand_reactivation_arr",
+    "daily_financial_data_billing_category_struct.change_in_ondemand_arr": "daily_arr_changes_category.ondemand_change_arr",
+    "daily_financial_data_billing_category_struct.is_net_churn":          "daily_arr_changes_category.is_net_churn",
+    "daily_financial_data_billing_category_struct.churn_arr":             "daily_arr_changes_category.reserved_churn_arr",
+    "daily_financial_data_billing_category_struct.contraction_arr":       "daily_arr_changes_category.reserved_contraction_arr",
+    "daily_financial_data_billing_category_struct.expansion_arr":         "daily_arr_changes_category.reserved_expansion_arr",
+    "daily_financial_data_billing_category_struct.new_arr":               "daily_arr_changes_category.reserved_new_arr",
+    "daily_financial_data_billing_category_struct.reactivation_arr":      "daily_arr_changes_category.reserved_reactivation_arr",
+    "daily_financial_data_billing_category_struct.churn_payg_arr":        "daily_arr_changes_category.ondemand_churn_arr",
+    "daily_financial_data_billing_category_struct.contraction_payg_arr":  "daily_arr_changes_category.ondemand_contraction_arr",
+    "daily_financial_data_billing_category_struct.expansion_payg_arr":    "daily_arr_changes_category.ondemand_expansion_arr",
+    "daily_financial_data_billing_category_struct.new_payg_arr":          "daily_arr_changes_category.ondemand_new_arr",
+    "daily_financial_data_billing_category_struct.reactivation_payg_arr": "daily_arr_changes_category.ondemand_reactivation_arr",
+},
 }
 
-FIELD_MAP = FIELD_MAPS.get((OLD_EXPLORE, NEW_EXPLORE), {})
+FIELD_MAP = {}
+for _old in OLD_EXPLORE:
+    for _new in (NEW_EXPLORE, NEW_EXPLORE_2):
+        FIELD_MAP.update(FIELD_MAPS.get((_old, _new), {}))
 
