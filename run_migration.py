@@ -74,9 +74,17 @@ def remap_filters(filters, field_map):
         return filters
     return {field_map.get(k, k): v for k, v in filters.items()}
 
-def broken_fields(fields, filters, field_map, target_explore=None):
+def broken_fields(fields, filters, dynamic_fields_str, field_map, target_explore=None):
     """Return list of fields/filter-keys that won't exist in the target explore."""
     candidates = list(fields or []) + list((filters or {}).keys())
+    if dynamic_fields_str:
+        for c in json.loads(dynamic_fields_str):
+            if c.get("based_on"):
+                candidates.append(c["based_on"])
+            candidates.extend((c.get("filters") or {}).keys())
+            for expr_key in ("expression", "filter_expression"):
+                if c.get(expr_key):
+                    candidates += re.findall(r'\$\{([^}]+)\}', c[expr_key])
     return [f for f in candidates if is_problem_field(f, field_map, target_explore)]
 
 def remap_sorts(sorts, field_map):
@@ -171,6 +179,15 @@ def route_explore(source_explore, fields, explore_view_sets):
     for f in (fields or []):
         if "." not in f:
             continue
+        # If the field has a mapping in exactly one candidate's map, route there.
+        # This handles renamed views (e.g. data_by_sdk → sdk_base_events) where the
+        # source view name won't appear in the destination explore's view set.
+        exclusive = [c for c in candidates if f in FIELD_MAPS.get((source_explore, c), {})]
+        if len(exclusive) == 1:
+            return exclusive[0]
+    for f in (fields or []):
+        if "." not in f:
+            continue
         view = f.split(".")[0]
         for candidate in candidates:
             other_views = set().union(*(explore_view_sets.get(c, set()) for c in candidates if c != candidate))
@@ -197,39 +214,7 @@ def is_problem_field(field, field_map, target_explore=None):
 
 
 # ─────────────────────────────────────────────
-# STEP 1: Snapshot
-# ─────────────────────────────────────────────
-def snapshot(sdk, dest_id):
-    elements = sdk.dashboard_dashboard_elements(dest_id)
-    snapshot_data = []
-    for el in elements:
-        if not el.query_id:
-            continue
-        q = sdk.query(str(el.query_id))
-        vc, loc = extract_vis_config(el, q)
-        snapshot_data.append({
-            "element_id": el.id,
-            "title": el.title,
-            "query_id": el.query_id,
-            "result_maker_id": el.result_maker_id,
-            "model": q.model,
-            "view": q.view,
-            "fields": q.fields,
-            "filters": q.filters,
-            "sorts": q.sorts,
-            "limit": q.limit,
-            "dynamic_fields": q.dynamic_fields,
-            "vis_config": vc,
-            "vis_config_source": loc,
-        })
-    fname = f"snapshot_{dest_id}.json"
-    with open(fname, "w") as f:
-        json.dump(snapshot_data, f, indent=2, default=str)
-    print(f"✓ Snapshot saved to {fname} ({len(snapshot_data)} tiles)")
-
-
-# ─────────────────────────────────────────────
-# STEP 2: Delete tiles and copy source dashboard
+# Delete tiles and copy source dashboard
 # ─────────────────────────────────────────────
 def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
     dest_elements    = sdk.dashboard_dashboard_elements(dest_id)
@@ -284,9 +269,6 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
                     _EXPLORE_VIEW_SETS,
                 )
                 field_map = FIELD_MAPS.get((q.view, target_explore), FIELD_MAP)
-                bad = broken_fields(q.fields, q.filters, field_map, target_explore)
-                if bad:
-                    broken_summary[el.title or "(untitled)"] = bad
                 new_query = sdk.create_query(models.WriteQuery(
                     model=NEW_MODEL,
                     view=target_explore,
@@ -301,6 +283,9 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
                     row_total=q.row_total,
                     filter_config=None,
                 ))
+                bad = broken_fields(new_query.fields, new_query.filters, new_query.dynamic_fields, field_map, new_query.view)
+                if bad:
+                    broken_summary[el.title or "(untitled)"] = bad
                 query_id = new_query.id
             else:
                 query_id = el.query_id
@@ -373,26 +358,6 @@ def delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id):
         print(f"\n  {clean}/{query_tile_count} tiles migrated cleanly ({pct}%)")
 
 
-# ─────────────────────────────────────────────
-# STEP 3: Verify — delegates to check()
-# ─────────────────────────────────────────────
-
-
-# ─────────────────────────────────────────────
-# ROLLBACK
-# ─────────────────────────────────────────────
-def rollback(sdk, dest_id):
-    print(f"Rolling back dashboard {dest_id}...")
-    fname = f"snapshot_{dest_id}.json"
-    with open(fname) as f:
-        snapshot_data = json.load(f)
-    for tile in snapshot_data:
-        sdk.update_dashboard_element(
-            str(tile["element_id"]),
-            models.WriteDashboardElement(query_id=tile["query_id"])
-        )
-        print(f"  ✅ Restored: {tile['title']}")
-    print("Rollback complete")
 
 
 # ─────────────────────────────────────────────
@@ -436,6 +401,5 @@ if __name__ == "__main__":
 
     print(f"\nMigrating dashboard {source_id} → {dest_id}")
 
-    snapshot(sdk, dest_id)
     delete_tiles_and_copy_source_dashboard(sdk, source_id, dest_id)
-    print(f"\n✓ Done — snapshot saved to snapshot_{dest_id}.json")
+    print(f"\n✓ Done")
